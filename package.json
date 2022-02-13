@@ -1,0 +1,15 @@
+{
+  "name": "js_compiler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "nearleyc src/quark.ne -o src/grammar.js && node src/index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "moo": "^0.5.1",
+    "nearley": "^2.20.1"
+  }
+}

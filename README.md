@@ -1,0 +1,1 @@
+`nearleyc quark.ne -o grammar.js`
