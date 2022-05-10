@@ -1,5 +1,12 @@
 const moo = require('moo')
- 
+
+const conditionals = [
+	'?.', '?(', '??', '?>',
+];
+const operators = [
+	'+', '-', '*', '/', '%', '**', '&', '|', '~', '^', '<<<', '>>>', '<<', '>>', '&&', '||', '<<', '>>', '!',
+];
+
 let lexer = moo.states({
 	main: {
 		whitespace: [{ match: /[ \n\t]+/, lineBreaks: true }, /[ \t]+/s],
@@ -27,7 +34,6 @@ let lexer = moo.states({
 
 		colon: ':',
 		spread: '...',
-		question: '?',
 		dot: '.',
 		comma: ',',
 
@@ -49,87 +55,66 @@ let lexer = moo.states({
 				'=', '+=', '-=', '*=', '/=', '%=', '**=', '&=', '|=', '~=', '^=', '<<<=', '>>>=', '<<=', '>>=', '&&=', '||=', '<<=', '>>=', '++', '--',
 			],
 			type: moo.keywords({
-				operator: [
-					'+', '-', '*', '/', '%', '**', '&', '|', '~', '^', '<<<', '>>>', '<<', '>>', '&&', '||', '<<', '>>', '!',
-				],
+				operator: operators,
 			}),
 		},
-		operator: [
-			'+', '-', '*', '/', '%', '**', '&', '|', '~', '^', '<<<', '>>>', '<<', '>>', '&&', '||', '<<', '>>', '!',
-		],
 
-		lbrace: '<',
-		rbrace: '>',
+		question: {
+			match: [ '?' ],
+			type: moo.keywords({
+				operator: conditional,
+			}),
+		},
+		larrow: '<',
+		rarrow: '>',
+
+		operator: [ ...operators, ...conditionals ],
 
 		identifier: {
 			match: /\w+/, type: moo.keywords({
 				control: [
-					// control structures
-					'if', 'else', 'do', 'switch', 'case', 'while', 'for', 'break', 'continue', 'return',
+					'if', 'else', 'do', 'switch', 'case', 'default', 'while', 'for', 'break', 'continue', 'return',
+				],
+				effects: [
+					'handle', 'with', 'catch', 'use',
+				],
+				async: [
+					'async', 'await',
 				],
 				object: [
-					'enum', 'struct', 'function', 'component',
-				],
-				extentions: [
-					// extention
-					'extends',
+					'enum', 'struct', 'function',
 				],
 				type: [
-					// data types
-					'let', 'boolean', 'int', 'float', 'symbol', 'null', 'object', 'function', 'char', 'component',
+					'let', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
 				],
-				access: [
-					// access modifiers
-					'public', 'private', 'protected', 'package',
+				module: [
+					'import', 'from', 'as', 'export', 'default',
 				],
-				modifier: [
-					// value modifiers
-					'static', 'final', 'strict',
-				],
-				import: [
-					// importing
-					'import', 'from', 'as',
-				],
-				export: [
-					'export', 'default',
-				],
-				null: [
-					'null', 'undefined',
+				'undefined': [
+					'undefined',
 				],
 			})
 		},
 		control: [
-			// control structures
-			'if', 'else', 'do', 'switch', 'case', 'while', 'for', 'break', 'continue', 'return',
+			'if', 'else', 'do', 'switch', 'case', 'default', 'while', 'for', 'break', 'continue', 'return',
+		],
+		effects: [
+			'handle', 'with', 'catch', 'use',
+		],
+		async: [
+			'async', 'await',
 		],
 		object: [
-			'enum', 'struct', 'function', 'component',
-		],
-		extentions: [
-			// extention
-			'extends',
+			'enum', 'struct', 'function',
 		],
 		type: [
-			// data types
-			'let', 'boolean', 'int', 'float', 'symbol', 'object', 'function', 'char', 'component',
+			'let', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
 		],
-		access: [
-			// access modifiers
-			'public', 'private', 'protected', 'package',
+		module: [
+			'import', 'from', 'as', 'export', 'default',
 		],
-		modifier: [
-			// value modifiers
-			'static', 'final',
-		],
-		import: [
-			// importing
-			'import', 'from', 'as',
-		],
-		export: [
-			'export', 'default',
-		],
-		null: [
-			'null', 'undefined',
+		'undefined': [
+			'undefined',
 		],
 		break: ';',
 	},
