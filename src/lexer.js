@@ -62,7 +62,7 @@ let lexer = moo.states({
 		question: {
 			match: [ '?' ],
 			type: moo.keywords({
-				operator: conditional,
+				operator: conditionals,
 			}),
 		},
 		larrow: '<',
