@@ -1,8 +1,3 @@
-@{%
-	const lexer = require('./lexer.js');
-	const util = require('util');
-%}
-@lexer lexer
 
 ROOT -> (_ IMPORT):* (_ BLOCK):*
 
