@@ -1,7 +1,7 @@
 const moo = require('moo')
 
 const conditionals = [
-	'?.', '?(', '??', '?>',
+	'?.', '?[', '?(', "?=", '??', '?>',
 ];
 const operators = [
 	'+', '-', '*', '/', '%', '**', '&', '|', '~', '^', '<<<', '>>>', '<<', '>>', '&&', '||', '<<', '>>', '!',
@@ -40,7 +40,7 @@ let lexer = moo.states({
 		arrow: "=>",
 
 		impl_tag_close: "/>",
-		tag_close: "</>",
+		tag_close: "</",
 
 		condition: {
 			match: [
@@ -76,7 +76,7 @@ let lexer = moo.states({
 					'if', 'else', 'do', 'switch', 'case', 'default', 'while', 'for', 'break', 'continue', 'return',
 				],
 				effects: [
-					'handle', 'with', 'catch', 'use',
+					'try', 'with', 'handle', 'use', 'throw', 'catch',
 				],
 				async: [
 					'async', 'await',
@@ -122,7 +122,7 @@ let lexer = moo.states({
 		interp: { match: '${', push: 'main' },
 		escape: /\\./,
 		lit_str_end: { match: '`', pop: true },
-		str_content: { match: /(?:[^$`]|\$(?!\{))+/, lineBreaks: true },
+		str_content: { match: /(?:[^$`\\])+/, lineBreaks: true },
 	},
 });
 
@@ -135,7 +135,6 @@ module.exports = {
 				return;
 			}
 		} while(next.type === 'comment');
-		// console.log(next);
 		return next;
 	},
 	save: () => {
