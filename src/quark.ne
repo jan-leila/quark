@@ -1,6 +1,6 @@
 @{%
-	const lexer = require('./lexer.js');
 	const util = require('util');
+	const lexer = require('../src/lexer.js');
 %}
 @lexer lexer
 
