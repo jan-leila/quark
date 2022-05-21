@@ -1,0 +1,41 @@
+
+enum status {
+    pending;
+    error;
+    success;
+}
+
+struct contact {
+    string name;
+    int age;
+    string email?;
+}
+
+// overwritable?
+function add_numbers(a, b){
+    return a + b;
+}
+
+effect read_effect from {
+    let file_name;
+}
+to {
+    let data;
+}
+
+monad optional {
+    boolean set;
+    let value;
+}
+bind (callback) {
+    if(set){
+        return callback(value);
+    }
+    return null;
+}
+reduce (default) {
+    if(set){
+        return value;
+    }
+    return default;
+}

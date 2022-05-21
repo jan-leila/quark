@@ -1,23 +1,24 @@
-const moo = require('moo')
-
-const conditionals = [
-	'?.', '?[', '?(', "?=", '??', '?>',
-];
-const operators = [
-	'+', '-', '*', '/', '%', '**', '&', '|', '~', '^', '<<<', '>>>', '<<', '>>', '&&', '||', '<<', '>>', '!',
-];
+const moo = require('moo');
 
 let lexer = moo.states({
 	main: {
 		whitespace: [{ match: /[ \n\t]+/, lineBreaks: true }, /[ \t]+/s],
 		comment: [
-			{ match: /\/\/.*?(?:\n|$)/, lineBreaks: true },
+			/\/\/[^\n]*/,
 			{ match: /\/\*[^]*?\*\//, lineBreaks: true },
 		],
 
+		binary: /0b[01]+/,
 		hex: /0x[0-9a-fA-F]+/,
 		int: /[0-9]+(?![0-9]*\.)/,
 		float: /(?:0|[1-9][0-9]*)(?:\.[0-9])?[0-9]*/,
+		color: [
+			/#[0-9a-fA-F]{3}/,
+			/#[0-9a-fA-F]{6}/,
+			/#[0-9a-fA-F]{8}/,
+		],
+
+		regex: /\/(?=(?:(?:\\.)?[^\\\/\n]+)+\/)/,
 
 		string: [
 			{ match: /".*?(?<!\\)(?:\\\\)*"/s, lineBreaks: true },
@@ -25,128 +26,45 @@ let lexer = moo.states({
 		],
 		lit_str_start: { match: '`', push: 'str_lit' },
 
-		lparen: '(',
-		rparen: ')',
 		lcbracket: { match: '{', push: 'main' },
 		rcbracket: { match: '}', pop: true },
-		lbracket: '[',
-		rbracket: ']',
 
-		colon: ':',
-		spread: '...',
-		dot: '.',
-		comma: ',',
+		misc_tokens: [
+			'<<<=', '>>>=',
+			'...', '<<<', '>>>',
 
-		arrow: "=>",
+			'<<=', '>>=', '&&=', '||=', '<<=', '>>=', '**=',
+			'??', '++', '--', '==', '<<', '>>', '&&', '||', '<<', '>>', '**',
 
-		impl_tag_close: "/>",
-		tag_close: "</",
-
-		condition: {
-			match: [
-				'!=', '>=', '<=', '==',
-			],
-			type: moo.keywords({
-				assignment: '=',
-			}),
-		},
-		assignment: {
-			match: [
-				'=', '+=', '-=', '*=', '/=', '%=', '**=', '&=', '|=', '~=', '^=', '<<<=', '>>>=', '<<=', '>>=', '&&=', '||=', '<<=', '>>=', '++', '--',
-			],
-			type: moo.keywords({
-				operator: operators,
-			}),
-		},
-
-		question: {
-			match: [ '?' ],
-			type: moo.keywords({
-				operator: conditionals,
-			}),
-		},
-		larrow: '<',
-		rarrow: '>',
-
-		operator: [ ...operators, ...conditionals ],
+			'+=', '-=', '*=', '/=', '%=', '&=', '|=', '~=', '^=', '=>', '/>', '</', '!=', '>=', '<=',
+			'=', '<', '>', '?', ':', '.', ',', '(', ')', '[', ']', '&', '|', '^', '+', '-', '*', '/', '%', '!', '~',
+		],
 
 		identifier: {
 			match: /\w+/, type: moo.keywords({
-				control: [
-					'if', 'else', 'do', 'switch', 'case', 'default', 'while', 'for', 'break', 'continue', 'return',
-				],
-				effects: [
-					'try', 'with', 'handle', 'use', 'throw', 'catch',
-				],
-				async: [
-					'async', 'await',
-				],
-				object: [
-					'enum', 'struct', 'function',
-				],
-				type: [
-					'let', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
-				],
-				module: [
+				keywords: [
 					'import', 'from', 'as', 'export', 'default',
-				],
-				'undefined': [
-					'undefined',
+					'if', 'else', 'switch', 'case', 'default', 'do', 'while', 'for', 'break', 'continue', 'return',
+					'try', 'with', 'handle', 'use', 'throw', 'catch',
+					'enum', 'struct', 'function', 'effect', 'from', 'to', 'monad', 'bind', 'reduce',
+					'let', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
+					'null',
 				],
 			})
 		},
-		control: [
-			'if', 'else', 'do', 'switch', 'case', 'default', 'while', 'for', 'break', 'continue', 'return',
-		],
-		effects: [
-			'handle', 'with', 'catch', 'use',
-		],
-		async: [
-			'async', 'await',
-		],
-		object: [
-			'enum', 'struct', 'function',
-		],
-		type: [
-			'let', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
-		],
-		module: [
-			'import', 'from', 'as', 'export', 'default',
-		],
-		'undefined': [
-			'undefined',
-		],
 		break: ';',
 	},
 	str_lit: {
 		interp: { match: '${', push: 'main' },
-		escape: /\\./,
+		str_content: { match: /(?:(?:\\.)+|[^\\$`]+)+/, lineBreaks: true },
 		lit_str_end: { match: '`', pop: true },
-		str_content: { match: /(?:[^$`\\])+/, lineBreaks: true },
 	},
+	regex: {
+		// TODO: replace with real regex parsing
+		regex: /(?:(?:\\.)?[^\\\/\n]+)+/,
+		// regex_literals: /(?:\\.)+/,
+		regex_end: { match: '/', pop: true },
+	}
 });
 
-module.exports = {
-	next: () => {
-		let next;
-		do {
-			next = lexer.next();
-			if(next == undefined){
-				return;
-			}
-		} while(next.type === 'comment');
-		return next;
-	},
-	save: () => {
-		return lexer.save();
-	},
-	reset: (chunk, info) => {
-		return lexer.reset(chunk, info);
-	},
-	formatError: (token) => {
-		return lexer.formatError(token);
-	},
-	has: (name) => {
-		return lexer.has(name);
-	},
-};
+module.exports = lexer;

@@ -17,8 +17,6 @@ to {
 	boolean sucess;
 }
 
-map<string, string> files;
-
 func read(file){
 	return with read_event(file);
 }
@@ -39,19 +37,23 @@ func main(){
 	}
 }
 
-try {
-	main()
-}
-handel(read_event { file }){
-	string data? = get(files, file);
-	use {
-		contents: data ?? '',
-		sucess: data == null,
-	};
-}
-handel(write_event { file, data }){
-	set(files, file, data);
-	use {
-		sucess: true,
+{
+	map<string, string> files;
+
+	try {
+		main()
+	}
+	handel(read_event { file }){
+		string data? = get(files, file);
+		use {
+			contents: data ?? '',
+			sucess: data == null,
+		};
+	}
+	handel(write_event { file, data }){
+		set(files, file, data);
+		use {
+			sucess: true,
+		}
 	}
 }
