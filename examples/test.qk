@@ -1,0 +1,7 @@
+import test from 'thing';
+
+1 + 2;
+
+3++;
+
+true? a : b;

@@ -1,59 +1,59 @@
 import { print } from 'console';
 import map { get, set } from 'map';
 
-event read_event from {
+event read_event in {
 	string file;
 }
-to {
-	string contents;
+out {
+	string data;
 	boolean sucess;
 }
 
-event write_event from {
+event write_event in {
 	string file;
 	string data;
 }
-to {
+out {
 	boolean sucess;
 }
 
-func read(file){
+function read(file){
 	return with read_event(file);
 }
 
-func write(file, data){
+function write(file, data){
 	return with write_event(file, data);
 }
 
-func main(){
-	read('file') >>= ({ data, sucess }) => {
-		print(data, sucess)
-	}
+function main(){
+	read('file') >>= ({ test }) => {
+		print(data, sucess);
+	};
 	write('file', 'some data here') >>= ({ sucess }) => {
-		print(sucess)
-	}
+		print(sucess);
+	};
 	read('file') >>= ({ data, sucess }) => {
-		print(data, sucess)
-	}
+		print(data, sucess);
+	};
 }
 
 {
 	map<string, string> files;
 
 	try {
-		main()
+		main();
 	}
-	handel(read_event { file }){
+	handle(read_event { file }){
 		string data? = get(files, file);
 		use {
-			contents: data ?? '',
-			sucess: data == null,
+			contents = data ?? '',
+			sucess = data == null,
 		};
 	}
-	handel(write_event { file, data }){
+	handle(write_event { file, data }){
 		set(files, file, data);
 		use {
-			sucess: true,
+			sucess = true,
 		}
 	}
 }

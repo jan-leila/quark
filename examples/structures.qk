@@ -5,27 +5,26 @@ enum status {
     success;
 }
 
-struct contact {
+struct <T> contact {
     string name;
     int age;
     string email?;
 }
 
-// overwritable?
-function add_numbers(a, b){
+function <T> add_numbers(a, b){
     return a + b;
 }
 
-effect read_effect from {
-    let file_name;
+event <T> read_effect in {
+    string file_name;
 }
-to {
-    let data;
+out {
+    string data;
 }
 
-monad optional {
+monad <T> optional {
     boolean set;
-    let value;
+    T value;
 }
 bind (callback) {
     if(set){
@@ -33,9 +32,9 @@ bind (callback) {
     }
     return null;
 }
-reduce (default) {
+reduce (default_value) {
     if(set){
         return value;
     }
-    return default;
+    return default_value;
 }
