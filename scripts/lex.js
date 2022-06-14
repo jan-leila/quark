@@ -6,5 +6,5 @@ lexer.reset(file);
 
 let line;
 while ((line = lexer.next())) {
-    console.log(line);
+    console.log(line.value);
 }
