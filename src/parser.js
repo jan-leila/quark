@@ -1,4 +1,3 @@
-const fs = require('fs');
 const nearley = require("nearley");
 const grammar = require("../build/grammar.js");
 

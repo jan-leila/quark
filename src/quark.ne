@@ -1,113 +1,70 @@
 @{%
-	const util = require('util');
 	const lexer = require('../src/lexer.js');
 %}
 @lexer lexer
 
-ROOT -> (_ IMPORT):* (_ BLOCK):* {%(args) => {
-    return {
-        imports: args[0].map((args) => {
-            return args[1];
-        }),
-        blocks: args[1].map((args) => {
-            return args[1];
-        }),
-    }
-}%}
+ROOT -> (_ IMPORT):* (_ BLOCK):*
+
+MANY[T] -> $T (_ "," _ $T):*
 
 IMPORT_NAME -> %identifier (_ "as" _ %identifier):?
-IMPORT_MAP -> "{" (_ IMPORT_NAME (_ "," _ IMPORT_NAME):*):? _ "}"
-IMPORT -> "import" _ (IMPORT_MAP | IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string BREAK
-DIRECT_EXPORT -> "export" _ (IMPORT_MAP | "*" | IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string BREAK
+IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
+IMPORT -> "import" _ (IMPORT_MAP | IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
+DIRECT_EXPORT -> "export" _ (IMPORT_MAP | "*" | IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
 
-# statements that can only be used at the top level
-BLOCK -> ("export" (_ "default"):? _):? (STATEMENT | STRUCT_DECLARATION | ENUM_DECLARATION) {% (args) => {
-    if(args[0]){
-        return {
-            node: 'export',
-            default: args[0][1] !== null,
-            value: args[1][0],
-        }
-    }
-    return args[1][0];
-}%}
+BLOCK -> ("export" (_ "default"):? _):? (ENUM | STRUCT | FUNCTION | EVENT | MONAD | STATEMENT)
 
-# chunks of code that do an action
+ENUM -> "enum" _ %identifier _ "{" (_ %identifier SEMI (_ %identifier SEMI):* ):? _ "}"
+
+ARRAY_DECLARATION -> "[" (_ EXPRESSION):? _ "]"
+
+STRUCT_VAR -> (TYPE _):? %identifier "?":? (ARRAY_DECLARATION "?":? ):*
+STRUCT_CONTENTS -> ("{"
+    (_ STRUCT_VAR _ SEMI):*
+    (
+        _ STRUCT_VAR "?":?  _ SEMI
+        | _ STRUCT_VAR "?":? (_ "=" _ EXPRESSION)  _ SEMI
+    ):*
+    _
+"}")
+
+STRUCT -> "struct" (_ GENERIC):? _ %identifier (_ "extends" _ TYPE):? _ STRUCT_CONTENTS
+
+EVENT -> "event" (_ GENERIC):? _ %identifier (_ "in" _ STRUCT_CONTENTS):? (_ "out" _ STRUCT_CONTENTS):?
+
+MONAD -> "monad" (_ GENERIC):? _ %identifier _ STRUCT_CONTENTS _ "bind" _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT (_ "reduce" (_ "(" _ FUNCTION_PARAMETER _ ")"):? _ STATEMENT):*
+
 STATEMENT -> (
-    HANDLE
-    | VARIABLE_DECLARATION
-    | ASSIGNMENT
-    | FUNCTION_DECLARATION
-    | SEQUENCE_STATEMENT
-    | RETURN_STATEMENT
-    | CALL
-    | BREAK_STATEMENT
-    | RETURN_STATEMENT
+    SCOPE
+    | EXPRESSION _ SEMI
+    | INLINE_SEQUENCE _ SEMI
+    | DECLARATION _ SEMI
     | IF
     | SWITCH
     | WHILE
     | DO_WHILE
     | FOR
-) _ BREAK {% (args) => {
-    return args[0][0];
-} %} | SCOPE_STATEMENT {% (args) => {
-    return {
-        node: 'scope',
-        statements: args[0],
-    };
-}%}
+    | TRY
+)
 
-SCOPE_STATEMENT -> "{" (_ STATEMENT):* _ "}" {% (args) => {
-    return args[1].map((args) => {
-        return args[1];
-    })
-}%}
-BREAK_STATEMENT -> "break"
-RETURN_STATEMENT -> "return" _ EXPRESSION
-SEQUENCE_STATEMENT -> EXPRESSION "?>" STATEMENT
+HANDLE -> "handle" _ "(" _ FUNCTION_PARAMETER _ ")" _ SCOPED_STATMENT
+CATCH -> "catch" _ "(" _ FUNCTION_PARAMETER _ ")" _ SCOPED_STATMENT
+TRY -> "try" _ STATEMENT (_ HANDLE | _ CATCH):+
 
-# control feature extractions
+BREAK -> "break"
+CONTINUE -> "CONTINUE"
+RETURN -> "return" (_ EXPRESSION):?
+USE -> "use" (_ EXPRESSION):?
+SCOPED_STATMENT -> (
+    STATEMENT
+    | BREAK
+    | CONTINUE
+    | RETURN
+    | USE
+)
+SCOPE -> "{" (_ SCOPED_STATMENT (_ SCOPED_STATMENT):*):? _ "}"
+
 CONTROL_CONDITION ->  "(" _ EXPRESSION _ ")"
-
-HANDLE_EFFECT -> (
-    ("with" | "catch") _
-    # this shouldnt be a var declaration because it cant be nullable
-    "(" _ VARIABLE_DECLARATION _ ")" _
-    "{" 
-        STATEMENT:*
-    "}"
-)
-
-HANDLE -> (
-    "handle" _ "{"
-        STATEMENT:*
-    "}"
-    ( _ HANDLE_EFFECT ):*
-)
-
-FUNCTION_DECLARATION -> (
-    "async":? "function" _ FUNCTION_PARAMETERS _ "{"
-        STATEMENT:*
-    "}"
-)
-
-STRUCT_DECLARATION -> (
-    "struct" _ TYPE_DECLARATION _ "{"
-        ( _ ( VARIABLE_DECLARATION | CONSTRUCTOR )):*
-        _
-    "}"
-)
-
-# Type<T>, Type<ParentType T>, Type<T, K>
-TYPE_DECLARATION_PARAM -> ( TYPE _ ):? %identifier
-TYPE_DECLARATION -> %identifier ( "<" _ TYPE_DECLARATION_PARAM:? ( _  "," _ TYPE_DECLARATION_PARAM):* _ ">" ):?
-
-ENUM_DECLARATION -> (
-    "enum" _ "{"
-        ( _ %identifier _ ";"):*
-        _
-    "}"
-)
 
 IF -> "if" _ CONTROL_CONDITION _ STATEMENT ( _ "else" _ "if" CONTROL_CONDITION _ STATEMENT ):* ( _ "else" _ STATEMENT):?
 SWITCH -> "switch" _ CONTROL_CONDITION _ "{" (
@@ -120,291 +77,171 @@ SWITCH -> "switch" _ CONTROL_CONDITION _ "{" (
 WHILE -> "while" _ CONTROL_CONDITION _ STATEMENT
 DO_WHILE -> "do" _ STATEMENT _ "while" CONTROL_CONDITION
 
-FOR_CONDITIONS -> STATEMENT _ ";" _ EXPRESSION _ ";" _ STATEMENT
-ENHANCED_FOR_CONDITIONS -> PARAMETER_DECLARATION _ ":" _ EXPRESSION
+FOR_CONDITIONS -> STATEMENT _ SEMI _ EXPRESSION _ SEMI _ STATEMENT
+ENHANCED_FOR_CONDITIONS -> FUNCTION_PARAMETER _ ":" _ EXPRESSION
 FOR -> "for" _ "(" _ ( FOR_CONDITIONS | ENHANCED_FOR_CONDITIONS ) _ ")" _ STATEMENT
 
-# something that resolves to a value
-EXPRESSION -> (
+DECLARATION_IDENTIFIER -> %identifier "?":? (_ ARRAY_DECLARATION "?":?):*
+DECLARATION -> (TYPE _):? (
+    DECLARATION_IDENTIFIER
+    | (
+        DECLARATION_IDENTIFIER
+        | DESTRUCTURE_ITERATOR
+        | DESTRUCTURE_STRUCT
+    ) _ "=" _ EXPRESSION
+)
+INLINE_SEQUENCE -> (TYPE _):? (%identifier | DESTRUCTURE_STRUCT) _ "<<=" _ EXPRESSION
+
+EXPRESSION -> ASSIGNMENT {% (value) => ["start count", value[0]]%}
+
+@{%
+    const did = value => value[0][0];
+    const normalize = value => value.filter(value => value).map(value => value[0][0]);
+%}
+
+CHAIN[LEFT, RIGHT] -> $LEFT | $RIGHT {% did %}
+
+OPERATOR[           SELF, TOKEN,          NEXT] -> CHAIN[$SELF _ $TOKEN _ $NEXT {% normalize %},                        $NEXT] {% did %}
+PREFIX_OPERATOR[    SELF, TOKEN,          NEXT] -> CHAIN[$TOKEN _ $SELF {% normalize %},                                $NEXT] {% did %}
+TERNARY_OPERATOR[   SELF, TOKEN, SPLITER, NEXT] -> CHAIN[$SELF _ $TOKEN _ $NEXT (_ $SPLITER _ $NEXT):?, $NEXT] {% did %}
+POSTFIX_OPERATOR[   SELF, TOKEN,          NEXT] -> CHAIN[$SELF _ $TOKEN {% normalize %},                                $NEXT] {% did %}
+GROUPING_OPERATOR[  SELF,                 NEXT] -> CHAIN["(" _ $SELF _ ")" {% normalize %},                             $NEXT] {% did %}
+
+CALL_OPERATOR[  FROM, INPUT, NEXT]  ->  CHAIN[$FROM ("(" | "?("):? (_ $INPUT _ ","):* (_ $INPUT):? _ ")",  $NEXT] {% did %}
+MEMBER_OPERATOR[FROM, NEXT]         ->  CHAIN[$FROM ("." | "?."):? %identifier,                            $NEXT] {% did %}
+INDEX_OPERATOR[ FROM, INPUT, NEXT]  ->  CHAIN[$FROM ("[" | "?["):? _ $INPUT _ "]",                         $NEXT] {% did %}
+
+ASSIGNMENT  ->  OPERATOR[           %identifier,                %assignment,                            SEQUENCE    ] {% id %}
+SEQUENCE    ->  OPERATOR[           SEQUENCE,                   ">>=",                                  WITH        ] {% id %}
+WITH        ->  PREFIX_OPERATOR[    WITH,                       "with",                                 TERNARY     ] {% id %}
+TERNARY     ->  TERNARY_OPERATOR[   TERNARY,                    "?",             ":",                   COALESCE    ] {% id %}
+COALESCE    ->  OPERATOR[           COALESCE,                   "??",                                   OR          ] {% id %}
+OR          ->  OPERATOR[           OR,                         "||",                                   AND         ] {% id %}
+AND         ->  OPERATOR[           AND,                        "&&",                                   BIT_OR      ] {% id %}
+BIT_OR      ->  OPERATOR[           BIT_OR,                     "|",                                    BIT_XOR     ] {% id %}
+BIT_XOR     ->  OPERATOR[           BIT_XOR,                    "^",                                    BIT_AND     ] {% id %}
+BIT_AND     ->  OPERATOR[           BIT_AND,                    "&",                                    EQUALITY    ] {% id %}
+EQUALITY    ->  OPERATOR[           EQUALITY,                   ("==" | "!="),                          COMPARISON  ] {% id %}
+COMPARISON  ->  OPERATOR[           COMPARISON,                 (">=" | "<=" | "<" | ">"),              SHIFT       ] {% id %}
+SHIFT       ->  OPERATOR[           SHIFT,                      ("<<<" | ">>>" | "<<" | ">>"),          SUM         ] {% id %}
+SUM         ->  OPERATOR[           SUM,                        ("+" | "-"),                            PRODUCT     ] {% id %}
+PRODUCT     ->  OPERATOR[           PRODUCT,                    ("*" | "/" | "%"),                      POWER       ] {% id %}
+POWER       ->  OPERATOR[           POWER,                      "**",                                   PREFIX      ] {% id %}
+PREFIX      ->  PREFIX_OPERATOR[    PREFIX,                     ("!" | "~" | "-" | "++" | "--"){% id %},POSTFIX     ] {% id %}
+POSTFIX     ->  POSTFIX_OPERATOR[   POSTFIX,                    ("++" | "--"),                          CALL        ] {% id %}
+CALL        ->  CALL_OPERATOR[      CALL, GROUPING,                                                 MEMBER      ] {% id %}
+MEMBER      ->  MEMBER_OPERATOR[    MEMBER,                                                           INDEX       ] {% id %}
+INDEX       ->  INDEX_OPERATOR[     INDEX, GROUPING,                                                 GROUPING    ] {% id %}
+GROUPING    ->  CHAIN[              "(" _ GROUPING _ ")",                                               VALUE       ] {% id %}
+
+VALUE -> (
     %identifier
-    | NATIVE_LITERAL
-    | STRING_TEMPLATE
-    | ELEMENT_LITERAL
-    | TERNARY
-    | ASSIGNMENT
-    | CALL
-    | PROPERTY
-    | COMPARISON
-    | BITWISE
-    | BOOLEAN
-    | SUM
-    | PRODUCT
-    | EXPONENT
-    | UNARY
-    | COALESCE
-    | SEQUENCE_EXPRESSION
-    | ARRAY
-    | ANONYMOUS_STRUCT
-    | ANONYMOUS_FUNCTION
-) {% (args) =>{
-    return args[0][0];
-} %}
+    | LITERAL               {% id %}
+    | TEMPLATE_STRING       {% id %}
+    | REGEX                 {% id %}
+    | FRAGMENT              {% id %}
+    | ELEMENT               {% id %}
+    | ANONYMOUS_FUNCTION    {% id %}
+    | ARRAY                 {% id %}
+    | ANONYMOUS_STRUCT      {% id %}
+    | ANONYMOUS_ITERATOR    {% id %}
+) {% id %}
 
-TERNARY -> EXPRESSION _ "?" _ EXPRESSION (_ ":" _ EXPRESSION):?
+ANONYMOUS_ITERATOR_VALUE -> EXPRESSION | "..." EXPRESSION
+ANONYMOUS_ITERATOR -> "[" (_ MANY[ANONYMOUS_ITERATOR_VALUE] (_ ","):? ):? _ "]"
 
-CALL -> ("await" _ ):? EXPRESSION _ ("(" | "?(") _ (EXPRESSION ( _ "," _ EXPRESSION ):* _ ):? ")"
+ANONYMOUS_STRUCT_VALUE -> (TYPE _):? %identifier (_ "=" _ EXPRESSION):? | "..." EXPRESSION
+ANONYMOUS_STRUCT -> "{" (_ MANY[ANONYMOUS_STRUCT_VALUE] (_ ","):?):? _ "}"
 
-PROPERTY -> EXPRESSION ("." | "?.") %identifier
-# TODO: array property
+SPREAD_MEMBER -> "..." %identifier
 
-# ordering is for order of operations
-COMPARISON -> EXPRESSION _ ("!=" | ">=" | "<=" | ">" | "<" | "==") _ EXPRESSION
-BITWISE -> EXPRESSION _ ("&" | "|" | "^" | "<<<" | ">>>" | "<<" | ">>") _ EXPRESSION
-BOOLEAN -> EXPRESSION _ ("&&" | "||" ) _ EXPRESSION
-SUM -> EXPRESSION _ ("+" | "-") _ EXPRESSION
-PRODUCT -> EXPRESSION _ ("*" | "/" | "%") _ EXPRESSION
-EXPONENT -> EXPRESSION _ "**" _ EXPRESSION
+DESTRUCTURE_ITERATOR_MEMBER -> (TYPE _):? (
+    %identifier "?" (_ "=" %identifier):?
+    | DESTRUCTURE_ITERATOR
+    | DESTRUCTURE_STRUCT
+)
+DESTRUCTURE_ITERATOR -> ( "["
+    (
+        _ MANY[(DESTRUCTURE_ITERATOR_MEMBER)]
+        ( _ "," (_ SPREAD_MEMBER):?):?
+    ):?
+_ "]")
 
-UNARY -> 
-	"(" _ EXPRESSION _ ")" |
-	("-" | "!" | "~") EXPRESSION
+DESTRUCTURED_STRUCT_MEMBER -> (TYPE _):? (
+    %identifier "?":? _ (
+        "=" _ VALUE
+        | ":" _ (DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT)
+    ):?
+)
+DESTRUCTURE_STRUCT -> ( "{"
+    (
+        _ MANY[DESTRUCTURED_STRUCT_MEMBER]
+        ( _ "," (_ SPREAD_MEMBER):?):?
+    ):?
+_ "}")
 
-COALESCE -> EXPRESSION "??" EXPRESSION
-SEQUENCE_EXPRESSION -> EXPRESSION "?>" EXPRESSION
+FUNCTION_PARAMETER -> (TYPE _):? (%identifier "?":? | DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT)
+FUNCTION_PARAMETERS -> MANY[FUNCTION_PARAMETER]
+ANONYMOUS_FUNCTION -> (GENERIC _):? ( FUNCTION_PARAMETERS | "(" _ FUNCTION_PARAMETERS:? _ ")") _ "=>" _ STATEMENT
+FUNCTION -> "function" _ (GENERIC _):? %identifier _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT
 
-ARRAY -> "[" (_ EXPRESSION (_ "," _ EXPRESSION):* ):? _ "]"
+TYPE -> (
+    "any"
+    | "symbol"
+    | "boolean"
+    | "int"
+    | "float"
+    | "string"
+    | "char"
+) | (
+    (
+        %identifier
+        | "func"
+    )
+    (
+        "<" (_ MANY[TYPE]):? _ ">"
+    ):?
+)
+
+GENERIC_ITEM -> %identifier ( _ "extends" TYPE):?
+GENERIC -> "<" (_ MANY[GENERIC_ITEM]):? _ ">"
+
+ELEMENT_CONTENT -> (EXPRESSION (_ EXPRESSION):*):?
+FRAGMENT -> "<" _ ">" _ ELEMENT_CONTENT _ "</" _ ">"
+ELEMENT -> "<" _ %identifier (_ %identifier _ "=" _ EXPRESSION):* _ (
+    "/>"
+    | ">" _ ELEMENT_CONTENT _ "<" (_ %identifier):? _ ">"
+)
+
+"<" _ %identifier (_ %identifier _ "=" _ EXPRESSION):* _ ("/>" | ">" (_ EXPRESSION):* _ %tag_close (_ %identifier):? _ ">")
 
 ANONYMOUS_STRUCT_VALUE -> %identifier | (%identifier _ "=" EXPRESSION)
 ANONYMOUS_STRUCT -> "{"
-    (_ ANONYMOUS_STRUCT_VALUE (_ "," _ ANONYMOUS_STRUCT_VALUE):* ):? _
+    (_ MANY[ANONYMOUS_STRUCT_VALUE]):? _
 "}"
 
-CONSTRUCTOR_PARAMETERS -> (
-    PARAMETER_DECLARATION ( _ "," _ PARAMETER_DECLARATION):*
-)
-CONSTRUCTOR -> "async":? "function" _ "(" ( _ FUNCTION_PARAMETERS ):? _ ")" _ "{"
-    STATEMENT:*
-"}"
+ARRAY -> "[" (_ MANY[EXPRESSION]):? _ "]"
 
-# things like:
-# param?, param ?? value, param { param? }
-DESTRUCTURED_PARAMETER -> FUNCTION_PARAMETER ("?" | (_ "??" STATEMENT | PARAMETER_DESTRUCTUR)):?
-# things like:
-# { param1?, param2? }
-PARAMETER_DESTRUCTUR -> (
-    "{"
-        DESTRUCTURED_PARAMETER:? ( _ "," _ DESTRUCTURED_PARAMETER):*
-        ( _ "..." _ %identifier):?
-        _
-    "}"
-)
-# things like:
-# value, int value, { value }
-FUNCTION_PARAMETER -> PARAMETER_DECLARATION | PARAMETER_DESTRUCTUR
-FUNCTION_PARAMETERS -> "(" _ (
-    FUNCTION_PARAMETER ( _ "," _ FUNCTION_PARAMETER):*
-):? _ ")"
-ANONYMOUS_FUNCTION -> (
-    "async":? ("function" _ FUNCTION_PARAMETERS | FUNCTION_PARAMETERS _ "=>") _ "{"
-        STATEMENT:*
-    "}"
-)
+# TODO: real regex parsing
+REGEX -> %regex %regex_content %regex_end
 
-ASSIGNMENT_TARGET -> %identifier {% (args) => {
-    let { col, line, value } = args[0];
-    return {
-        type: 'direct',
-        target: value,
-        col, line,
-    };
-} %} | ASSIGNMENT_TARGET "." %identifier {% (args) => {
-    let { col, line, value } = args[2];
-    return {
-        type: 'property',
-        parent: args[0],
-        target: value,
-        col, line,
-    };
-}%} | ASSIGNMENT_TARGET "[" _ EXPRESSION _ "]" {% (args) => {
-    let { col, line, value } = args[3];
-    return {
-        type: 'index',
-        parent: args[0],
-        target: value,
-        col, line,
-    };
-}%}
-# a = 1, b = "test"
-ASSIGNMENT -> ASSIGNMENT_TARGET _ %assignment _ EXPRESSION {% (args) => {
-    return {
-        node: 'assignment',
-        target: args[0],
-        type: args[2].value,
-        value: args[4],
-    };
-}%} | ASSIGNMENT_TARGET ("++" | "--") {% (args) => {
-    return {
-        node: args[1][0].value === '++' ? 'increment' : 'decrement',
-        target: args[0],
-    };
-} %}
+TEMPLATE_STRING -> %template_string_start (
+    %template_string_content    |
+    (%template_string_interpreter _ EXPRESSION _ "}")
+):* %template_string_end
 
-# let a[]?, int b = 1;
-VARIABLE_DECLARATION -> TYPE _ VARIABLE_KEYWORD (_ "=" _ EXPRESSION):? {% (args) => {
-    let { line, col, value } = args[2];
-    if(args[3]){
-        return {
-            node: 'variable_declaration',
-            type: args[0],
-            target: value,
-            value: args[3][3],
-            line, col,
-        };
-    }
-    return {
-        node: 'variable_declaration',
-        type: args[0],
-        target: value,
-        line, col,
-    };
-} %}
-# let a, int b, stirng c[]?, d
-PARAMETER_DECLARATION -> (TYPE _):? VARIABLE_KEYWORD {% (args) => {
-    let { line, col, value } = args[1];
-    if(args[0]){
-        return {
-            node: 'parameter_declaration',
-            type: args[0][0],
-            target: value,
-            line, col,
-        };
-    }
-    return {
-        node: 'parameter_declaration',
-        target: value,
-        line, col,
-    };
-} %}
-# a[]?, b?, c[], d
-VARIABLE_KEYWORD -> %identifier ("[" _ "]"):* "?":? {% (args) => {
-    let { line, col, value } = args[0];
-    return {
-        value,
-        depth: args[1].length,
-        nullable: !!args[2],
-        line, col,
-    };
-} %}
+LITERAL -> (
+	"null"
+    | %binary
+    | %hex
+    | %int
+    | %float
+    | %color
+	| %string
+) {% id %}
 
-# Type, Type<int>, Type1<Type2<int>>, Type1<int, int>
-TYPE -> %type {% (args) => {
-    let { line, col, value } = args[0]
-    return {
-        node: 'native_type',
-        target: value,
-        line, col,
-    };
-} %} | %identifier ("<" _ TYPE:? ( _  "," _ TYPE):* _ ">"):? {% (args) => {
-    let { line, col, value } = args[0];
-
-    if(args[1]){
-        return {
-            node: 'type',
-            target: value,
-            generic: [ args[1][2], ...args[1][3].map((args) => {
-                return args[3];
-            })].filter((arg) => arg),
-            line, col,
-        };
-    }
-
-    return {
-        node: 'type',
-        target: value,
-        line, col,
-    };
-} %}
-
-# <></>, <tag></>, <tag value=1/> <tag>value</>
-ELEMENT_LITERAL -> "<" _ %identifier (_ %identifier _ "=" _ EXPRESSION):* _ ("/>" | ">" (_ EXPRESSION):* _ %tag_close (_ %identifier):? _ ">") {% (args) => {
-    let children;
-    if(args[5][0].type === 'impl_tag_close'){
-        children = [];
-    }
-    else {
-        if(args[5][4]){
-            let closeTag = args[5][4][1];
-            if(closeTag.value !== args[2].value){
-                return {
-                    node: 'error',
-                    type: 'tag_missmatch',
-                    col: closeTag.col, line: closeTag.line,
-                };
-            }
-        }
-        children = args[5][1].map((args) => {
-            return args[1];
-        });
-    }
-    return {
-        node: 'element',
-        target: args[2],
-        props: args[3].map((args) => {
-            return {
-                key: args[1],
-                value: args[5],
-            };
-        }),
-        children,
-    };
-} %}
-
-# `this is some text ${getValue()} more text`
-STRING_TEMPLATE -> %lit_str_start (
-    %str_content
-    | %escape
-    | (%interp _ EXPRESSION _ "}")
-):* %lit_str_end {% (args) => {
-    return {
-        node: 'template_string',
-        value: args[1].reduce((out, [ value ]) => {
-            if(Array.isArray(value)){
-                out.push({
-                    type: 'interp',
-                    value: value[2],
-                });
-            }
-            else {
-                let last = out[out.length - 1];
-                if(last?.type === 'text'){
-                    last.value += value.value;
-                }
-                else {
-                    let { line, col } = value;
-                    out.push({
-                        type: 'text',
-                        line, col,
-                        value: value.value,
-                    });
-                }
-            }
-            return out;
-        }, []),
-    };
-}%}
-
-# literal values such as numbers text and undefined
-NATIVE_LITERAL -> (
-    %int	|
-	%float	|
-	%hex    |
-	%string |
-	%undefined
-) {% (args) => {
-    let { line, col, type, value } = args[0][0];
-    return { node: 'value', line, col, type, value };
-} %}
-
-# semantic things
-BREAK -> ";" {% () => {} %}
-_ -> %whitespace:? {% () => {} %}
+SEMI -> ";" {%() => null%}
+# mandatory whitespace
+__ -> (%whitespace | %comment):+ {%() => null%}
+# optional whitespace 
+_ -> (%whitespace | %comment):* {%() => null%}
