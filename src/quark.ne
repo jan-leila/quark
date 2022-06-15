@@ -30,7 +30,7 @@ STRUCT_CONTENTS -> ("{"
 
 STRUCT -> "struct" (_ GENERIC):? _ %identifier (_ "extends" _ TYPE):? _ STRUCT_CONTENTS
 
-EVENT -> "event" (_ GENERIC):? _ %identifier (_ "in" _ STRUCT_CONTENTS):? (_ "out" _ STRUCT_CONTENTS):?
+EVENT -> "event" (_ GENERIC):? _ %identifier (_ "in" _ STRUCT_CONTENTS):? (_ "out" _ STRUCT_CONTENTS):? (_ HANDLE):?
 
 MONAD -> "monad" (_ GENERIC):? _ %identifier _ STRUCT_CONTENTS _ "bind" _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT (_ "reduce" (_ "(" _ FUNCTION_PARAMETER _ ")"):? _ STATEMENT):*
 
