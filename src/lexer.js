@@ -3,7 +3,7 @@ const moo = require('moo');
 let keywords = [
 	'import', 'from', 'as', 'export', 'default',
 	'if', 'else', 'switch', 'case', 'default', 'do', 'while', 'for', 'break', 'continue', 'return',
-	'try', 'with', 'handle', 'use', 'throw', 'catch',
+	'try', 'with', 'handle', 'use',
 	'enum', 'struct', 'function', 'event', 'in', 'out', 'monad', 'bind', 'reduce', 'extends',
 	'any', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
 	'null',

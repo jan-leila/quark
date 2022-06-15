@@ -48,8 +48,7 @@ STATEMENT -> (
 )
 
 HANDLE -> "handle" _ "(" _ FUNCTION_PARAMETER _ ")" _ SCOPED_STATMENT
-CATCH -> "catch" _ "(" _ FUNCTION_PARAMETER _ ")" _ SCOPED_STATMENT
-TRY -> "try" _ STATEMENT (_ HANDLE | _ CATCH):+
+TRY -> "try" _ STATEMENT (_ HANDLE):+
 
 BREAK -> "break"
 CONTINUE -> "CONTINUE"
