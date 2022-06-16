@@ -43,7 +43,7 @@ let misc_tokens = [
 
 let lexer = moo.states({
 	main: {
-		whitespace: [{ match: /[ \n\t]+/, lineBreaks: true }, /[ \t]+/s],
+		whitespace: [/[ \t]+/s, { match: /[ \n\t]+/, lineBreaks: true }],
 		comment: [
 			/\/\/[^\n]*/,
 			{ match: /\/\*[^]*?\*\//, lineBreaks: true },

@@ -7,32 +7,33 @@ ROOT -> (_ IMPORT):* (_ BLOCK):*
 
 MANY[T] -> $T (_ "," _ $T):*
 
-IMPORT_NAME -> %identifier (_ "as" _ %identifier):?
+IMPORT_NAME -> %identifier (__ "as" __ %identifier):?
 IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
-IMPORT -> "import" _ (IMPORT_MAP | IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
-DIRECT_EXPORT -> "export" _ (IMPORT_MAP | "*" | IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
+IMPORT -> "import" _ (IMPORT_MAP | __ IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
+DIRECT_EXPORT -> "export" _ (IMPORT_MAP | "*" | __ IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
 
-BLOCK -> ("export" (_ "default"):? _):? (ENUM | STRUCT | FUNCTION | EVENT | MONAD | STATEMENT)
+BLOCK -> ("export" (__ "default"):? __):? (ENUM | STRUCT | FUNCTION | EVENT | MONAD | STATEMENT)
 
-ENUM -> "enum" _ %identifier _ "{" (_ %identifier SEMI (_ %identifier SEMI):* ):? _ "}"
+ENUM -> "enum" __ %identifier _ "{" (_ %identifier SEMI (_ %identifier SEMI):* ):? _ "}"
 
 ARRAY_DECLARATION -> "[" (_ EXPRESSION):? _ "]"
 
 STRUCT_VAR -> (TYPE _):? %identifier "?":? (ARRAY_DECLARATION "?":? ):*
 STRUCT_CONTENTS -> ("{"
-    (_ STRUCT_VAR _ SEMI):*
     (
-        _ STRUCT_VAR "?":?  _ SEMI
-        | _ STRUCT_VAR "?":? (_ "=" _ EXPRESSION)  _ SEMI
+        _ STRUCT_VAR (_ "=" _ EXPRESSION):? _ SEMI
+    ):*
+    (
+        _ STRUCT_VAR "?":? (_ "=" _ EXPRESSION)  _ SEMI
     ):*
     _
 "}")
 
-STRUCT -> "struct" (_ GENERIC):? _ %identifier (_ "extends" _ TYPE):? _ STRUCT_CONTENTS
+STRUCT -> "struct" (_ GENERIC _ | __) %identifier (__ "extends" __ TYPE):? _ STRUCT_CONTENTS
 
-EVENT -> "event" (_ GENERIC):? _ %identifier (_ "in" _ STRUCT_CONTENTS):? (_ "out" _ STRUCT_CONTENTS):? (_ HANDLE):?
+EVENT -> "event" (_ GENERIC _ | __) %identifier __ ("in" _ STRUCT_CONTENTS):? (_ "out" _ STRUCT_CONTENTS):? (_ HANDLE):?
 
-MONAD -> "monad" (_ GENERIC):? _ %identifier _ STRUCT_CONTENTS _ "bind" _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT (_ "reduce" (_ "(" _ FUNCTION_PARAMETER _ ")"):? _ STATEMENT):*
+MONAD -> "monad" (_ GENERIC _ | __) %identifier _ STRUCT_CONTENTS _ "bind" _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT (_ "reduce" (_ "(" _ FUNCTION_PARAMETER _ ")"):? _ STATEMENT):*
 
 STATEMENT -> (
     SCOPE
