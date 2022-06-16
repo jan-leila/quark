@@ -5,8 +5,9 @@
   "main": "main.js",
   "scripts": {
     "lex": "node scripts/lex.js",
-    "preparse": "mkdir build ; nearleyc src/quark.ne -o build/grammar.js",
+    "preparse": "mkdir build -p ; nearleyc src/quark.ne -o build/grammar.js",
     "parse": "npm run preparse && node scripts/parse.js",
+    "unparse": "npm run preparse && nearley-unparse -s BLOCK build/grammar.js",
     "start": "npm run preparse && echo \"start script not defined\""
   },
   "author": "",
@@ -14,5 +15,8 @@
   "dependencies": {
     "moo": "^0.5.1",
     "nearley": "^2.20.1"
+  },
+  "devDependencies": {
+    "nearley-unparse": "^1.0.1"
   }
 }
