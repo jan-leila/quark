@@ -92,7 +92,7 @@ DECLARATION -> (TYPE _):? (
 )
 INLINE_SEQUENCE -> (TYPE _):? (%identifier | DESTRUCTURE_STRUCT) _ "<<=" _ EXPRESSION
 
-EXPRESSION -> ASSIGNMENT {% (value) => ["start count", value[0]]%}
+EXPRESSION -> ASSIGNMENT {% id %}
 
 @{%
     const did = value => value[0][0];
@@ -226,9 +226,32 @@ ARRAY -> "[" (_ MANY[EXPRESSION]):? _ "]"
 REGEX -> %regex %regex_content %regex_end
 
 TEMPLATE_STRING -> %template_string_start (
-    %template_string_content    |
-    (%template_string_interpreter _ EXPRESSION _ "}")
-):* %template_string_end
+    %template_string_content {% ([ {type, ...rest} ]) => {
+        return {
+            type: 'content',
+            ...rest
+        }
+    } %}
+    | %template_string_interpreter _ EXPRESSION _ "}" {% (value) => {
+        const {type, ...rest} = value[2][0];
+        return { type: 'interpolate', ...rest}
+    } %}
+):* %template_string_end {% (value) => {
+    let {
+        offset,
+        lineBreaks,
+        line,
+        col,
+    } = value[0]
+    return {
+        type: 'template_string',
+        parts: value[1],
+        offset,
+        lineBreaks,
+        line,
+        col,
+    }
+}%}
 
 LITERAL -> (
 	"null"
