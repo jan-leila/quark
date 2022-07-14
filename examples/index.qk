@@ -1,8 +1,9 @@
-import { effect } from 'effects@quark'
-import map, { get, set } from 'map@quark'
-import { print } from 'console@quark'
-import { to_bytes, from_bytes } from 'strings@quark'
-import { subsection } from 'arrays@quark'
+import { effect } from 'effects'
+import map, { get, set } from 'map'
+import { print } from 'console'
+import { to_bytes, from_bytes } from 'strings'
+import { subsection } from 'arrays'
+import { boolean, string, byte } from 'primitives'
 
 let sys_call_event = () => {
 	let file_read_event = effect(byte[], byte[])

@@ -1,4 +1,4 @@
-import test { a,b,c,d } from 'thing'
+import { int } from 'primitives'
 
 let a = 15.7
 

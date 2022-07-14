@@ -1,5 +1,6 @@
-import { effect, event, resource, signal } from '@quark:effects/'
+import { effect, event, resource, signal } from 'effects'
 import { monad, comonad } from 'monads'
+import { symbol, string, int } from 'primitives'
 
 let status = {
     symbol pending
