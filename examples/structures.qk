@@ -1,40 +1,40 @@
+import { effect, event, resource, signal } from '@quark:effects/'
+import { monad, comonad } from 'monads'
 
-enum status {
-    pending;
-    error;
-    success;
-}
-
-struct <T> contact {
-    string name;
-    int age;
-    string email?;
+let status = {
+    symbol pending
+    symbol error
+    symbol success
 }
 
-function <T> add_numbers(a, b){
-    return a + b;
+let contact = {
+    string name
+    int age
+    string email?
 }
 
-event <T> read_effect in {
-    string file_name;
-}
-out {
-    string data;
+let add_numbers = (a, b) => {
+    return a + b
 }
 
-monad <T> optional {
-    boolean set;
-    T value;
+let read_file_effect = effect(string, string)
+let read_file = (file_name, callback) => {
+    with read_file(file_name) >>= callback
 }
-bind (callback) {
-    if(set){
-        return callback(value);
-    }
-    return null;
-}
-reduce (default_value) {
-    if(set){
-        return value;
-    }
-    return default_value;
+
+let optional_monad = (value?) => {
+    return comonad(
+        (callback) => {
+            if (value != null) {
+                return optional_monad(callback(value))
+            }
+            return optional_monad()
+        },
+        (default_value) => {
+            if (value != null) {
+                return value
+            }
+            return default_value
+        }
+    )   
 }

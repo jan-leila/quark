@@ -1,7 +1,11 @@
-import test from 'thing';
+import test { a,b,c,d } from 'thing'
 
-1 + 2;
+let a = 15.7
 
-3++;
+let name = {
 
-true? a : b;
+}
+
+overload + (int a, int b){
+    
+}
