@@ -2,48 +2,58 @@ const moo = require('moo');
 
 let keywords = [
 	'import', 'from', 'as', 'export', 'default',
-	'if', 'else', 'switch', 'case', 'default', 'do', 'while', 'for', 'break', 'continue', 'return',
-	'try', 'with', 'handle', 'use',
-	'enum', 'struct', 'function', 'event', 'in', 'out', 'monad', 'bind', 'reduce', 'extends',
-	'any', 'symbol', 'boolean', 'int', 'float', 'string', 'char', 'func',
-	'null',
+	'if', 'else', 'switch', 'case', 'do', 'while', 'for', 'break', 'continue', 'return',
+	'try', 'with', 'handle', 'use', 'overload',
+	'let', 'null',
 ];
 
 let assignment = [
-	'=??', '=&&', '=||',
-	'=<<<', '=>>>', '=<<', '=>>',
+	'=??',  
+	'=<<<', '=>>>',
+	'=<<', '=>>',
+	'=&&', '=||', '=^^',
+	'=**', '=//', '=%%',
 	'=&', '=|', '=^',
-	'=**', '=%', '=*', '=/', '=+', '=-',
+	'=*', '=%', '=/', '=+', '=-',
 	'=',
 ];
 
-let misc_tokens = [
-	'...',
+let operator = [
 	'<<<', '>>>',
 
-	'<<=', '>>=',
+	'==',
+
+	'<<', '>>',
+	
+	'&&', '||',
+	'**', '//', '++', '--',
+
+	'!=', '>=', '<=', '<', '>',
+
+	'!', '~',
+	'&', '|', '^',
+	'*', '/', '%','+', '-',
+]
+
+let misc_tokens = [
+	'...',
+	'=>',
+
+	'>>=', '<<=',
 
 	'??',
-	'==',
-	'&&', '||', '<<', '>>',
-	'**', '++', '--',
-
-	'=>',
-	'/>', '</',
-	'!=', '>=', '<=',
 	'?.', '?(', '?[',
 
 	'?', ':',
 	'.', '(', '[',
-	',', '<', '>', ')', ']',
-	'!', '~', '&', '|', '^',
-	'+', '-', '*', '/', '%',
+	',', ')', ']',
 ];
 
 
 let lexer = moo.states({
 	main: {
-		whitespace: [/[ \t]+/s, { match: /[ \n\t]+/, lineBreaks: true }],
+		newline: { match: /\s*\n\s*/, lineBreaks: true },
+		whitespace: /[ \t]+/s,
 		comment: [
 			/\/\/[^\n]*/,
 			{ match: /\/\*[^]*?\*\//, lineBreaks: true },
@@ -51,7 +61,7 @@ let lexer = moo.states({
 
 		binary: /0b[01]+/,
 		hex: /0x[0-9a-fA-F]+/,
-		int: /[0-9]+(?![0-9]*\.)/,
+		int: /[0-9]+(?![0-9]*[.])/,
 		float: /(?:0|[1-9][0-9]*)(?:\.[0-9])?[0-9]*/,
 		color: [
 			/#[0-9a-fA-F]{3}/,
@@ -70,6 +80,12 @@ let lexer = moo.states({
 		lcbracket: { match: '{', push: 'main' },
 		rcbracket: { match: '}', pop: true },
 
+		operator: {
+			match: operator,
+			type: moo.keywords({
+				assignment,
+			}),
+		},
 		misc_tokens: {
 			match: misc_tokens,
 			type: moo.keywords({
@@ -99,24 +115,37 @@ let lexer = moo.states({
 	}
 });
 
+let running
 module.exports = {
-	next(){
-		let token;
-		do {
-			token = lexer.next()
-		} while (token?.type === 'comment');
-		return token
+	next() {
+		let next = lexer.next();
+		if (next) {
+			let {
+				toString,
+				...token
+			} = next
+			return token
+		}
+		if (running) {
+			running = false
+			return {
+				type: 'end',
+				value: '',
+				text: '',
+			}
+		}
 	},
-	save(){
+	save() {
 		return lexer.save();
 	},
-	reset(chunk, info){
+	reset(chunk, info) {
+		running = true
 		return lexer.reset(chunk, info);
 	},
-	formatError(token){
+	formatError(token) {
 		return lexer.formatError(token);
 	},
-	has(name){
+	has(name) {
 		return lexer.has(name);
 	}
 };
