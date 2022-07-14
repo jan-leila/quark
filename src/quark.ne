@@ -1,115 +1,164 @@
 @{%
 	const lexer = require('../src/lexer.js');
+    const util = require('util');
+    const log = (value) => {
+        console.log(util.inspect(value, { showHidden: false, depth: null, colors: true }));
+        return value
+    }
+    const location = (value) => {
+        let {
+            offset,
+            lineBreaks,
+            line,
+            col,
+        } = value[0]
+        return {
+            offset,
+            lineBreaks,
+            line,
+            col,
+        }
+    }
+    const did = value => value[0][0];
+    const normalize = (value) => {
+        value.filter(value => value).map(value => value[0][0])
+    }
+    const strip = (type, characters) => {
+        return (value) => {
+            return {
+                type,
+                value: value[0].value.substring(characters, value[0].value.length - 1),
+                ...location(value)
+            }
+        }
+    }
 %}
+
 @lexer lexer
 
-ROOT -> (_ IMPORT):* (_ BLOCK):*
+MANY[T] -> $T (_ "," _ $T):* {%(value) => {
+    return [
+        value[0][0],
+        ...value[1].map((_value) => {
+            return _value[3][0]
+        })
+    ]
+}%}
+MANYP[T] -> MANY[$T] (_ ","):? {%(value) => {
+    return value[0]
+}%}
 
-MANY[T] -> $T (_ "," _ $T):*
+ROOT -> (_ IMPORT):* (_ TOP_STATEMENT):* BREAK:? {% (values) => {
+    return {
+        imports: values[0].map((value) => {
+            return value[1]
+        }),
+        statements: values[1].map((value) => {
+            return value[1]
+        }),
+    }
+}%}
 
-IMPORT_NAME -> %identifier (__ "as" __ %identifier):?
-IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
-IMPORT -> "import" _ (IMPORT_MAP | __ IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
-DIRECT_EXPORT -> "export" _ (IMPORT_MAP | "*" | __ IMPORT_NAME ( _ IMPORT_MAP):?) _ "from" _ %string SEMI
+IMPORT_NAME -> %identifier (_ "as" _ %identifier):? {%(value) => {
+    return {
+        target: value[0].value,
+        as: value[1] ? value[1][3].value : value[0].value,
+    }
+}%}
+IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}" {%(value) => {
+    return value[1][1]
+}%}
+IMPORT -> "import" _ (IMPORT_MAP {% (value) => {
+    return {
+        imports: value[0]
+    }
+}%} | %identifier ( _ IMPORT_MAP):? {% (values) => {
+    return {
+        default_import: values[0].value,
+        imports: values[1]? values[1][1] : [],
+    }
+}%}) _ "from" _ STRING BREAK {%(value) => {
+    return {
+        type: 'import',
+        values: value[2],
+        from: value[6].value,
+        ...location(value),
+    }
+}%}
 
-BLOCK -> ("export" (__ "default"):? __):? (ENUM | STRUCT | FUNCTION | EVENT | MONAD | STATEMENT)
+TOP_STATEMENT -> STATEMENT | EXPORT_EXPRESSION {% id %}
 
-ENUM -> "enum" __ %identifier _ "{" (_ %identifier SEMI (_ %identifier SEMI):* ):? _ "}"
-
-ARRAY_DECLARATION -> "[" (_ EXPRESSION):? _ "]"
-
-STRUCT_VAR -> (TYPE _):? %identifier "?":? (ARRAY_DECLARATION "?":? ):*
-STRUCT_CONTENTS -> ("{"
-    (
-        _ STRUCT_VAR (_ "=" _ EXPRESSION):? _ SEMI
-    ):*
-    (
-        _ STRUCT_VAR "?":? (_ "=" _ EXPRESSION)  _ SEMI
-    ):*
-    _
-"}")
-
-STRUCT -> "struct" (_ GENERIC _ | __) %identifier (__ "extends" __ TYPE):? _ STRUCT_CONTENTS
-
-EVENT -> "event" (_ GENERIC _ | __) %identifier __ ("in" _ STRUCT_CONTENTS):? (_ "out" _ STRUCT_CONTENTS):? (_ HANDLE):?
-
-MONAD -> "monad" (_ GENERIC _ | __) %identifier _ STRUCT_CONTENTS _ "bind" _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT (_ "reduce" (_ "(" _ FUNCTION_PARAMETER _ ")"):? _ STATEMENT):*
+EXPORT_EXPRESSION -> "export" _ (EXPORT_NAME | "{" MANYP[EXPORT_NAME] "}")
+EXPORT_NAME -> EXPRESSION _ "as" (%identifier | "default") | %identifier
 
 STATEMENT -> (
-    SCOPE
-    | EXPRESSION _ SEMI
-    | INLINE_SEQUENCE _ SEMI
-    | DECLARATION _ SEMI
-    | IF
-    | SWITCH
-    | WHILE
-    | DO_WHILE
-    | FOR
-    | TRY
-)
+    EXPRESSION        _ BREAK
+    | INLINE_SEQUENCE _ BREAK
+    | DECLARATION     _ BREAK
+    | BREAK           _ BREAK
+    | CONTINUE        _ BREAK
+    | RETURN          _ BREAK
+    | USE             _ BREAK
+    | IF             (_ BREAK):?
+    | SWITCH         (_ BREAK):?
+    | WHILE          (_ BREAK):?
+    | DO_WHILE       (_ BREAK):?
+    | FOR            (_ BREAK):?
+    | TRY            (_ BREAK):?
+    | OVERLOAD       (_ BREAK):?
+) {% did %}
 
-HANDLE -> "handle" _ "(" _ FUNCTION_PARAMETER _ ")" _ SCOPED_STATMENT
-TRY -> "try" _ STATEMENT (_ HANDLE):+
+OVERLOAD -> "overload" _ %operator _ "(" _ EXPRESSION _ %identifier (_ "," _ EXPRESSION _ %identifier) _ ")" _ STATEMENT
 
-BREAK -> "break"
-CONTINUE -> "CONTINUE"
+TRY -> LABEL:? "try" _ STATEMENT (_ HANDLE):+
+HANDLE -> LABEL:? "handle" (_ MANY[EXPRESSION] ):? (_ "(" _ FUNCTION_PARAMETER _ ")"):? _ STATEMENT
+
+BREAK -> "break" (_ %identifier):?
+CONTINUE -> "continue" (_ %identifier):?
 RETURN -> "return" (_ EXPRESSION):?
 USE -> "use" (_ EXPRESSION):?
-SCOPED_STATMENT -> (
-    STATEMENT
-    | BREAK
-    | CONTINUE
-    | RETURN
-    | USE
-)
-SCOPE -> "{" (_ SCOPED_STATMENT (_ SCOPED_STATMENT):*):? _ "}"
 
 CONTROL_CONDITION ->  "(" _ EXPRESSION _ ")"
 
-IF -> "if" _ CONTROL_CONDITION _ STATEMENT ( _ "else" _ "if" CONTROL_CONDITION _ STATEMENT ):* ( _ "else" _ STATEMENT):?
-SWITCH -> "switch" _ CONTROL_CONDITION _ "{" (
-    _ "case" _ EXPRESSION _ ":"
+IF -> LABEL:? "if" _ CONTROL_CONDITION _ STATEMENT ( _ LABEL "else" _ "if" CONTROL_CONDITION _ STATEMENT ):* ( _ LABEL "else" _ STATEMENT):?
+SWITCH -> LABEL:? "switch" _ CONTROL_CONDITION _ "{" (
+    _ CASE
     (
-        _ ("case" _ EXPRESSION _ ":" | STATEMENT )
+        _ (CASE | STATEMENT )
     ):*
     _
 ):? _ "}"
-WHILE -> "while" _ CONTROL_CONDITION _ STATEMENT
-DO_WHILE -> "do" _ STATEMENT _ "while" CONTROL_CONDITION
+CASE -> "case" _ EXPRESSION _ ":"
+WHILE -> LABEL:? "while" _ CONTROL_CONDITION _ STATEMENT
+DO_WHILE -> LABEL:? "do" _ STATEMENT _ "while" CONTROL_CONDITION
 
-FOR_CONDITIONS -> STATEMENT _ SEMI _ EXPRESSION _ SEMI _ STATEMENT
+FOR_CONDITIONS -> STATEMENT _ ";" _ EXPRESSION _ ";" _ STATEMENT
 ENHANCED_FOR_CONDITIONS -> FUNCTION_PARAMETER _ ":" _ EXPRESSION
-FOR -> "for" _ "(" _ ( FOR_CONDITIONS | ENHANCED_FOR_CONDITIONS ) _ ")" _ STATEMENT
+FOR -> LABEL:? "for" _ "(" _ ( FOR_CONDITIONS | ENHANCED_FOR_CONDITIONS ) _ ")" _ STATEMENT
 
-DECLARATION_IDENTIFIER -> %identifier "?":? (_ ARRAY_DECLARATION "?":?):*
-DECLARATION -> (TYPE _):? (
-    DECLARATION_IDENTIFIER
-    | (
-        DECLARATION_IDENTIFIER
-        | DESTRUCTURE_ITERATOR
-        | DESTRUCTURE_STRUCT
-    ) _ "=" _ EXPRESSION
-)
-INLINE_SEQUENCE -> (TYPE _):? (%identifier | DESTRUCTURE_STRUCT) _ "<<=" _ EXPRESSION
+DECLARATION -> ("export" _ ("default" _):?):? DECLARATION_TYPE _ %identifier | ("export" _):? DECLARATION_TYPE _ (
+    %identifier
+    | DESTRUCTURE_ITERATOR
+    | DESTRUCTURE_STRUCT
+) _ "=" _ EXPRESSION
+DECLARATION_TYPE -> EXPRESSION _ "?":? (_ ARRAY_DECLARATION (_ "?"):?):*
+INLINE_SEQUENCE -> (EXPRESSION _):? (%identifier | DESTRUCTURE_STRUCT) _ "<<=" _ EXPRESSION
+
+LABEL -> (%identifier _ ":" _)
 
 EXPRESSION -> ASSIGNMENT {% id %}
 
-@{%
-    const did = value => value[0][0];
-    const normalize = value => value.filter(value => value).map(value => value[0][0]);
-%}
-
 CHAIN[LEFT, RIGHT] -> $LEFT | $RIGHT {% did %}
 
-OPERATOR[           SELF, TOKEN,          NEXT] -> CHAIN[$SELF _ $TOKEN _ $NEXT {% normalize %},                        $NEXT] {% did %}
-PREFIX_OPERATOR[    SELF, TOKEN,          NEXT] -> CHAIN[$TOKEN _ $SELF {% normalize %},                                $NEXT] {% did %}
+OPERATOR[           SELF, TOKEN,          NEXT] -> CHAIN[$SELF _ $TOKEN _ $NEXT {% normalize %},        $NEXT] {% did %}
+PREFIX_OPERATOR[    SELF, TOKEN,          NEXT] -> CHAIN[$TOKEN _ $SELF {% normalize %},                $NEXT] {% did %}
 TERNARY_OPERATOR[   SELF, TOKEN, SPLITER, NEXT] -> CHAIN[$SELF _ $TOKEN _ $NEXT (_ $SPLITER _ $NEXT):?, $NEXT] {% did %}
-POSTFIX_OPERATOR[   SELF, TOKEN,          NEXT] -> CHAIN[$SELF _ $TOKEN {% normalize %},                                $NEXT] {% did %}
-GROUPING_OPERATOR[  SELF,                 NEXT] -> CHAIN["(" _ $SELF _ ")" {% normalize %},                             $NEXT] {% did %}
+POSTFIX_OPERATOR[   SELF, TOKEN,          NEXT] -> CHAIN[$SELF _ $TOKEN {% normalize %},                $NEXT] {% did %}
+GROUPING_OPERATOR[  SELF,                 NEXT] -> CHAIN["(" _ $SELF _ ")" {% normalize %},             $NEXT] {% did %}
 
-CALL_OPERATOR[  FROM, INPUT, NEXT]  ->  CHAIN[$FROM ("(" | "?("):? (_ $INPUT _ ","):* (_ $INPUT):? _ ")",  $NEXT] {% did %}
-MEMBER_OPERATOR[FROM, NEXT]         ->  CHAIN[$FROM ("." | "?."):? %identifier,                            $NEXT] {% did %}
-INDEX_OPERATOR[ FROM, INPUT, NEXT]  ->  CHAIN[$FROM ("[" | "?["):? _ $INPUT _ "]",                         $NEXT] {% did %}
+CALL_OPERATOR[  FROM, INPUT, NEXT]  ->  CHAIN[$FROM ("(" | "?(") _ MANY[$INPUT]:? _ ")",    $NEXT] {% did %}
+MEMBER_OPERATOR[FROM, NEXT]         ->  CHAIN[$FROM ("." | "?.") %identifier,               $NEXT] {% did %}
+INDEX_OPERATOR[ FROM, INPUT, NEXT]  ->  CHAIN[$FROM ("[" | "?[") _ $INPUT _ "]",            $NEXT] {% did %}
 
 ASSIGNMENT  ->  OPERATOR[           %identifier,                %assignment,                            SEQUENCE    ] {% id %}
 SEQUENCE    ->  OPERATOR[           SEQUENCE,                   ">>=",                                  WITH        ] {% id %}
@@ -127,103 +176,89 @@ SHIFT       ->  OPERATOR[           SHIFT,                      ("<<<" | ">>>" |
 SUM         ->  OPERATOR[           SUM,                        ("+" | "-"),                            PRODUCT     ] {% id %}
 PRODUCT     ->  OPERATOR[           PRODUCT,                    ("*" | "/" | "%"),                      POWER       ] {% id %}
 POWER       ->  OPERATOR[           POWER,                      "**",                                   PREFIX      ] {% id %}
-PREFIX      ->  PREFIX_OPERATOR[    PREFIX,                     ("!" | "~" | "-" | "++" | "--"){% id %},POSTFIX     ] {% id %}
+PREFIX      ->  PREFIX_OPERATOR[    PREFIX,                     ("!" | "~" | "-" | "++" | "--"){% id %},CALL     ] {% id %}
 POSTFIX     ->  POSTFIX_OPERATOR[   POSTFIX,                    ("++" | "--"),                          CALL        ] {% id %}
-CALL        ->  CALL_OPERATOR[      CALL, GROUPING,                                                 MEMBER      ] {% id %}
-MEMBER      ->  MEMBER_OPERATOR[    MEMBER,                                                           INDEX       ] {% id %}
-INDEX       ->  INDEX_OPERATOR[     INDEX, GROUPING,                                                 GROUPING    ] {% id %}
+CALL        ->  CALL_OPERATOR[      CALL, GROUPING,                                                     MEMBER      ] {% id %}
+MEMBER      ->  MEMBER_OPERATOR[    MEMBER,                                                             INDEX       ] {% id %}
+INDEX       ->  INDEX_OPERATOR[     INDEX, GROUPING,                                                    GROUPING    ] {% id %}
 GROUPING    ->  CHAIN[              "(" _ GROUPING _ ")",                                               VALUE       ] {% id %}
 
 VALUE -> (
     %identifier
     | LITERAL               {% id %}
+    | TYPE_LITERAL          {% id %}
     | TEMPLATE_STRING       {% id %}
     | REGEX                 {% id %}
-    | FRAGMENT              {% id %}
-    | ELEMENT               {% id %}
-    | ANONYMOUS_FUNCTION    {% id %}
-    | ARRAY                 {% id %}
+    | FUNCTION              {% id %}
     | ANONYMOUS_STRUCT      {% id %}
     | ANONYMOUS_ITERATOR    {% id %}
+    | STRUCT                {% id %}
 ) {% id %}
 
-ANONYMOUS_ITERATOR_VALUE -> EXPRESSION | "..." EXPRESSION
-ANONYMOUS_ITERATOR -> "[" (_ MANY[ANONYMOUS_ITERATOR_VALUE] (_ ","):? ):? _ "]"
-
-ANONYMOUS_STRUCT_VALUE -> (TYPE _):? %identifier (_ "=" _ EXPRESSION):? | "..." EXPRESSION
-ANONYMOUS_STRUCT -> "{" (_ MANY[ANONYMOUS_STRUCT_VALUE] (_ ","):?):? _ "}"
-
-SPREAD_MEMBER -> "..." %identifier
-
-DESTRUCTURE_ITERATOR_MEMBER -> (TYPE _):? (
-    %identifier "?" (_ "=" %identifier):?
-    | DESTRUCTURE_ITERATOR
-    | DESTRUCTURE_STRUCT
-)
-DESTRUCTURE_ITERATOR -> ( "["
+STRUCT -> (EXPRESSION _ ":" _ ):? STRUCT_CONTENTS
+STRUCT_CONTENTS -> ("{"
     (
-        _ MANY[(DESTRUCTURE_ITERATOR_MEMBER)]
-        ( _ "," (_ SPREAD_MEMBER):?):?
-    ):?
-_ "]")
+        _ EXPRESSION (_ ARRAY_DECLARATION (_ "?"):? ):* _ %identifier (_ "=" _ EXPRESSION):? _ BREAK
+    ):*
+    (
+        _ EXPRESSION (_ "?" (_ ARRAY_DECLARATION (_ "?"):? ):*):? _ %identifier (_ "=" _ EXPRESSION)  _ BREAK
+    ):*
+    # TODO: operator overloading here:
+    _
+"}")
 
-DESTRUCTURED_STRUCT_MEMBER -> (TYPE _):? (
-    %identifier "?":? _ (
-        "=" _ VALUE
-        | ":" _ (DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT)
-    ):?
-)
+FUNCTION -> (
+    FUNCTION_PARAMETERS | ENCLOSED_PARAMETERS
+) _ "=>" _ STATEMENT
+ENCLOSED_PARAMETERS -> "(" (_ FUNCTION_PARAMETERS):? _ ")"
+FUNCTION_PARAMETERS -> MANY[FUNCTION_PARAMETER]
+FUNCTION_PARAMETER -> (EXPRESSION _):? (%identifier "?":? | (%identifier _ ":" _):? DESTRUCTURE_ITERATOR | (%identifier _ ":" _):? DESTRUCTURE_STRUCT)
+
 DESTRUCTURE_STRUCT -> ( "{"
     (
         _ MANY[DESTRUCTURED_STRUCT_MEMBER]
         ( _ "," (_ SPREAD_MEMBER):?):?
     ):?
 _ "}")
-
-FUNCTION_PARAMETER -> (TYPE _):? (%identifier "?":? | DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT)
-FUNCTION_PARAMETERS -> MANY[FUNCTION_PARAMETER]
-ANONYMOUS_FUNCTION -> (GENERIC _):? ( FUNCTION_PARAMETERS | "(" _ FUNCTION_PARAMETERS:? _ ")") _ "=>" _ STATEMENT
-FUNCTION -> "function" _ (GENERIC _):? %identifier _ "(" _ FUNCTION_PARAMETERS:? _ ")" _ STATEMENT
-
-TYPE -> (
-    "any"
-    | "symbol"
-    | "boolean"
-    | "int"
-    | "float"
-    | "string"
-    | "char"
-) | (
-    (
-        %identifier
-        | "func"
-    )
-    (
-        "<" (_ MANY[TYPE]):? _ ">"
+DESTRUCTURED_STRUCT_MEMBER -> (EXPRESSION _):? (
+    %identifier "?":? _ (
+        "=" _ VALUE
+        | ":" _ (DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT)
     ):?
 )
 
-GENERIC_ITEM -> %identifier ( _ "extends" TYPE):?
-GENERIC -> "<" (_ MANY[GENERIC_ITEM]):? _ ">"
-
-ELEMENT_CONTENT -> (EXPRESSION (_ EXPRESSION):*):?
-FRAGMENT -> "<" _ ">" _ ELEMENT_CONTENT _ "</" _ ">"
-ELEMENT -> "<" _ %identifier (_ %identifier _ "=" _ EXPRESSION):* _ (
-    "/>"
-    | ">" _ ELEMENT_CONTENT _ "<" (_ %identifier):? _ ">"
+DESTRUCTURE_ITERATOR -> ( "["
+    (
+        _ MANY[(DESTRUCTURE_ITERATOR_MEMBER)]
+        ( _ "," (_ SPREAD_MEMBER):?):?
+    ):?
+_ "]")
+DESTRUCTURE_ITERATOR_MEMBER -> (EXPRESSION _):? (
+    %identifier "?" (_ "=" %identifier):?
+    | DESTRUCTURE_ITERATOR
+    | DESTRUCTURE_STRUCT
 )
 
-"<" _ %identifier (_ %identifier _ "=" _ EXPRESSION):* _ ("/>" | ">" (_ EXPRESSION):* _ %tag_close (_ %identifier):? _ ">")
+SPREAD_MEMBER -> "..." %identifier
 
-ANONYMOUS_STRUCT_VALUE -> %identifier | (%identifier _ "=" EXPRESSION)
 ANONYMOUS_STRUCT -> "{"
-    (_ MANY[ANONYMOUS_STRUCT_VALUE]):? _
+    (_ MANYP[ANONYMOUS_STRUCT_VALUE]):? _
 "}"
+ANONYMOUS_STRUCT_VALUE -> %identifier | (%identifier _ "=" EXPRESSION)
 
-ARRAY -> "[" (_ MANY[EXPRESSION]):? _ "]"
+ANONYMOUS_ITERATOR -> "["
+    (_ MANYP[ANONYMOUS_ITERATOR_VALUE]):? _
+"]" {%(value) => {
+    return {
+        type: 'array',
+        parts: value[1][1][0],
+        ...location(value[0])
+    }
+}%}
+ANONYMOUS_ITERATOR_VALUE -> EXPRESSION | "..." EXPRESSION
 
 # TODO: real regex parsing
-REGEX -> %regex %regex_content %regex_end
+REGEX -> %regex %regex_content %regex_end {% () => 'not implemented 💀'%}
 
 TEMPLATE_STRING -> %template_string_start (
     %template_string_content {% ([ {type, ...rest} ]) => {
@@ -237,34 +272,36 @@ TEMPLATE_STRING -> %template_string_start (
         return { type: 'interpolate', ...rest}
     } %}
 ):* %template_string_end {% (value) => {
-    let {
-        offset,
-        lineBreaks,
-        line,
-        col,
-    } = value[0]
     return {
         type: 'template_string',
         parts: value[1],
-        offset,
-        lineBreaks,
-        line,
-        col,
+        ...location(value[0])
     }
 }%}
 
+TYPE_LITERAL -> "let"
+
 LITERAL -> (
 	"null"
-    | %binary
-    | %hex
+    | %binary {% strip('binary', 2) %}
+    | %hex {% strip('hex', 2) %}
     | %int
     | %float
-    | %color
-	| %string
+    | %color {% strip('color', 1) %}
+	| STRING {% id %}
 ) {% id %}
 
-SEMI -> ";" {%() => null%}
-# mandatory whitespace
-__ -> (%whitespace | %comment):+ {%() => null%}
+STRING -> %string {%(value) => {
+    return {
+        type: 'string',
+        value: value[0].value.substring(1, value[0].value.length - 1),
+        ...location(value)
+    }
+}%}
+
+ARRAY_DECLARATION -> "[" _ "]"
+
+BREAK -> (";" | %newline | %end):+ {%() => null%}
+
 # optional whitespace 
-_ -> (%whitespace | %comment):* {%() => null%}
+_ -> (%newline | %whitespace | %comment):* {%() => null%}
