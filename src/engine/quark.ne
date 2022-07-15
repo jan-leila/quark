@@ -1,5 +1,5 @@
 @{%
-	const lexer = require('../src/lexer.js');
+	const lexer = require('../src/engine/lexer.js');
     const util = require('util');
     const log = (value) => {
         console.log(util.inspect(value, { showHidden: false, depth: null, colors: true }));

@@ -1,0 +1,30 @@
+{
+	"entry_point": "",
+	"sources": {
+		"quark": {
+			"type": "collider",
+			"source": "https://name-here"
+		},
+		"jan-leila": {
+			"type": "github",
+			"source": "https://www.github.com/jan-leila"
+		}
+	},
+	"aliases": {
+		"name": "long_name@quark"
+	},
+	"packages": {
+		"sub_package": "0.0.1",
+		"child_package": "0.0.1",
+		"peer_package": "0.0.1"
+	},
+	"overrides": {
+		"sub_package": "0.0.1",
+		"child_package": {
+			"grand_child_package": "0.0.1"
+		}
+	},
+	"peers": {
+		"peer_package": "0.0.0"
+	}
+}

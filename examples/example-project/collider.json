@@ -1,0 +1,33 @@
+{
+	"hosts": [
+		{
+			"url": "",
+			"name": ""
+		}
+	],
+	"repositories": [
+		{
+			"type": "",
+			"url": ""
+		}
+	],
+	"contributors": [
+		{
+			"name": "",
+			"email": "",
+			"url": "",
+			"funding": [
+				{
+					"type": "",
+					"url": ""
+				}
+			]
+		}
+	],
+	"description": "",
+	"website": "",
+	"issues": "",
+	"keywords": [
+		"", "", ""
+	]
+}

@@ -1,0 +1,6 @@
+
+manifest.json
+collider.json
+
+src/
+!*.test.qk

@@ -1,20 +1,24 @@
 {
   "name": "js_compiler",
-  "version": "1.0.0",
+  "version": "0.0.1-alpha",
   "description": "",
-  "main": "main.js",
+  "main": "src/index.js",
   "scripts": {
     "lex": "node scripts/lex.js",
-    "preparse": "mkdir build -p ; nearleyc src/quark.ne -o build/grammar.js",
+    "preparse": "mkdir build -p ; nearleyc src/engine/quark.ne -o build/grammar.js",
     "parse": "npm run preparse && node scripts/parse.js",
     "unparse": "npm run preparse && nearley-unparse -s BLOCK build/grammar.js",
     "start": "npm run preparse && echo \"start script not defined\""
+  },
+  "bin": {
+    "collider": "src/index.js"
   },
   "author": "",
   "license": "gpl-3.0",
   "dependencies": {
     "moo": "^0.5.1",
-    "nearley": "^2.20.1"
+    "nearley": "^2.20.1",
+    "yargs": "^17.5.1"
   },
   "devDependencies": {
     "nearley-unparse": "^1.0.1"
