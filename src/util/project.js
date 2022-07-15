@@ -2,14 +2,40 @@ const { exists, read_file, write_file } = require('./files')
 const path = require('path')
 const user = require('./user')
 
+let usingSyncWrites = false
+let writeIndex = 0
+let writePoint = 0
+// hack because js doesn't have algebraic effects
+exports.useConfig = async (contents) => {
+    usingSyncWrites = true
+    try {
+        writePoint = 0
+        await contents()
+    }
+    catch (prom) {
+        if (!prom instanceof Promise)
+            throw prom
+        writeIndex++
+        await prom
+    }
+    writeIndex = 0
+    usingSyncWrites = false
+}
+
 let proxy_object = (object, update) => {
     return new Proxy(object, {
         get(target, property){
-            return proxy_object(target[property], root)
+            let value = target[property]
+            if (typeof value !== 'object')
+                return value
+            return proxy_object(value, update)
         },
         set(target, property, value){
-            target[property] = value
-            update()
+            writePoint++
+            if(writePoint > writeIndex)
+                target[property] = value
+                if(usingSyncWrites)
+                    throw update()
         }
     })
 }
@@ -39,7 +65,7 @@ const load_file = async (file) => {
         let file_path = path.join(dir, file)
         let data = JSON.parse(await read_file(file_path))
         return files[file] = proxy_object(data, () => {
-            write_file(file_path, JSON.stringify(data))
+            return write_file(file_path, JSON.stringify(data, null, '\t'))
         })
     }
 }
@@ -50,7 +76,7 @@ exports.config = new Proxy({}, {
             case "manifest":
             case "development":
             case "collider":
-                return await load_file(property)
+                return await load_file(`${property}.json`)
         }
     },
 })

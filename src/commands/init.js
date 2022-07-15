@@ -45,8 +45,6 @@ exports.handler = async argv => {
         return
     }
 
-    await mkdir(folder)
-    
     let less = argv.less || argv.yes
     let entry_point = await get_entry_point(less, argv.entry)
 

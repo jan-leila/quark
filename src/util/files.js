@@ -13,7 +13,7 @@ const mkdir = async (dir) => {
 
 
 const read_file = async (file) => {
-    return await fs.promises.read_file(
+    return await fs.promises.readFile(
         file,
         {
             encoding: 'utf-8',

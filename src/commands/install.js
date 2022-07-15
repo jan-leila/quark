@@ -1,3 +1,4 @@
+const project = require('../util/project')
 
 exports.command = 'install <package>'
 
@@ -10,18 +11,18 @@ exports.builder = yargs => yargs
     .option('peer', {
         alias: 'p',
         type: 'boolean',
-        description: '',
+        description: 'install package as a peer dependency',
     })
     .option('development', {
         alias: 'd',
         type: 'boolean',
-        description: '',
+        description: 'install package as a dev dependency',
     })
     .conflicts('d', 'p')
     .option('no-install', {
         alias: 'n',
         type: 'boolean',
-        description: '',
+        description: 'add package to dependency list without installing it',
     })
 
 const package = Symbol()
@@ -31,23 +32,28 @@ const development = Symbol()
 exports.handler = async argv => {
     let type = argv.development ? development : argv.peer ? peer : package
     
-    let source = undefined
-    let package_name = undefined
-    let version = undefined
+    let source = 'source'
+    let package_name = 'package_name'
+    let version = 'version'
     
     let dependency = `${package_name}@${source}`
 
-    switch (type) {
-        case package:
-            project.config.manifest.packages[dependency] = version
-            break;
-        case peer:
-            project.config.manifest.peers[dependency] = version
-            break;
-        case development:
-            project.config.development.packages[dependency] = version
-            break;
-    }
+    await project.useConfig(async () => {
+        let config
+        switch (type) {
+            case package:
+                config = await project.config.manifest ?? {}
+                break;
+            case peer:
+                config = await project.config.manifest ?? {}
+                break;
+            case development:
+                config = await project.config.development ?? {}
+                break;
+        }
+        let packages = config.packages ?? {};
+        config.packages = { ...packages, [dependency]: version }
+    })
 
     if(!argv.n){
         // TODO: install package

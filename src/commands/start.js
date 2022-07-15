@@ -8,20 +8,21 @@ exports.describe = 'run quark with target file as main'
 exports.builder = yargs => yargs
     .positional('file', {
         describe: 'target file to run from',
-        default: async () => project.config.manifest.entry_point,
+        default: async () => (await project.config.manifest).entry_point,
     })
+    .middleware(async argv => argv.file = await argv.file)
 
 exports.handler = async argv => {
     return await start(argv)
 }
 
 const start = async (argv) => {
-    let entry_point = await argv.file
+    let entry_point = argv.file
     if (entry_point === undefined) {
         console.log('no entry point provided');
         return
     }
-    let file = path.join(await project.dir, entry_point)
+    let file = path.join(await project.directory(), entry_point)
     console.log(file);
 }
 
