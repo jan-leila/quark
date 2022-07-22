@@ -1,5 +1,5 @@
 const fs = require('fs');
-const lexer = require('../src/lexer.js');
+const lexer = require('../src/engine/lexer.js');
 
 let file = fs.readFileSync('examples/index.qk', "utf-8");
 lexer.reset(file);

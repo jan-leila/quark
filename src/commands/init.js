@@ -1,6 +1,6 @@
 const path = require('path')
 const { is_valid_project } = require('../util/project')
-const { mkdir, write_file } = require('../util/files')
+const { write_file } = require('../util/files')
 const { current_dir, prompt } = require('../util/user')
 
 exports.command = 'init [folder]'
@@ -52,7 +52,7 @@ exports.handler = async argv => {
         write_file(path.join(folder, 'manifest.json'), JSON.stringify({
             entry_point,
             sources: {},
-        })),
+        }, null, '\t')),
         write_file(path.join(folder, entry_point), '')
     ])
 }

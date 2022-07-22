@@ -1,61 +1,46 @@
-const project = require('../util/project')
+const { parse_name, install } = require("../util/package")
 
-exports.command = 'install <package>'
+exports.command = 'install <package> [source] [type]'
 
-exports.describe = 'add dependencies to your project'
+exports.describe = 'install dependency localy'
 
 exports.builder = yargs => yargs
     .positional('package', {
-        describe: 'target folder to create project in',
+        describe: 'target package name',
     })
-    .option('peer', {
-        alias: 'p',
-        type: 'boolean',
-        description: 'install package as a peer dependency',
+    .positional('source', {
+        describe: 'source to install the package from',
     })
-    .option('development', {
-        alias: 'd',
-        type: 'boolean',
-        description: 'install package as a dev dependency',
+    .positional('type', {
+        describe: 'source type',
     })
-    .conflicts('d', 'p')
-    .option('no-install', {
-        alias: 'n',
-        type: 'boolean',
-        description: 'add package to dependency list without installing it',
-    })
-
-const package = Symbol()
-const peer = Symbol()
-const development = Symbol()
 
 exports.handler = async argv => {
-    let type = argv.development ? development : argv.peer ? peer : package
-    
-    let source = 'source'
-    let package_name = 'package_name'
-    let version = 'version'
-    
-    let dependency = `${package_name}@${source}`
+    let { package, version, source } = parse_name(argv.package)
 
-    await project.useConfig(async () => {
-        let config
-        switch (type) {
-            case package:
-                config = await project.config.manifest ?? {}
-                break;
-            case peer:
-                config = await project.config.manifest ?? {}
-                break;
-            case development:
-                config = await project.config.development ?? {}
-                break;
-        }
-        let packages = config.packages ?? {};
-        config.packages = { ...packages, [dependency]: version }
-    })
+    const project = require('../util/project')
 
-    if(!argv.n){
-        // TODO: install package
+    let source_uri;
+    let source_type;
+
+    if (argv.source) {
+        source_uri = argv.source
+        source_type = argv.type
     }
+    else if (source) {
+        let manifest_source = (await project.config.manifest).sources[source]
+        if (manifest_source) {
+            source_uri = manifest_source.source
+            source_type = manifest_source.type
+        }
+        else {
+            let development_source = (await project.config.development).sources[source]
+            if (development_source) {
+                source_uri = development_source.source
+                source_type = development_source.type
+            }
+        }
+    }
+
+    install(package, version, source_uri, source_type)
 }

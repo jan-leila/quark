@@ -1,5 +1,5 @@
 import { effect } from 'effects'
-import map, { get, set } from 'map'
+import map { get, set } from 'map'
 import { print } from 'console'
 import { to_bytes, from_bytes } from 'strings'
 import { subsection } from 'arrays'
