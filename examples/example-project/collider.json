@@ -2,7 +2,8 @@
 	"hosts": [
 		{
 			"url": "",
-			"name": ""
+			"name": "",
+			"type": ""
 		}
 	],
 	"repositories": [

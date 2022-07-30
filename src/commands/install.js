@@ -1,8 +1,9 @@
 const { parse_name, install } = require("../util/package")
+const project = require('../util/project')
 
 exports.command = 'install <package> [source] [type]'
 
-exports.describe = 'install dependency localy'
+exports.describe = 'install dependency locally'
 
 exports.builder = yargs => yargs
     .positional('package', {
@@ -17,8 +18,6 @@ exports.builder = yargs => yargs
 
 exports.handler = async argv => {
     let { package, version, source } = parse_name(argv.package)
-
-    const project = require('../util/project')
 
     let source_uri;
     let source_type;
