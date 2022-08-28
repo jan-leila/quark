@@ -9,10 +9,17 @@ const exists = async (file) => {
         .catch(() => false)
 }
 
+const is_dir = async (location) => {
+    return await fs.promises.lstat(location).isFile()
+}
+
+const list_dir = async (location) => {
+    return await fs.promises.readdir(location)
+}
+
 const mkdir = async (dir) => {
     return await fs.promises.mkdir(dir, { recursive: true })
 }
-
 
 const read_file = async (file) => {
     return await fs.promises.readFile(
@@ -38,18 +45,20 @@ const delete_file = async (file) => {
     return await fs.promises.unlink(file)
 }
 
-const downalod = async (uri, output) => {
+const create_read_stream = (...args) => {
+    return fs.createReadStream(...args)
+}
+
+const download = async (url, output) => {
     try {
-        const file_stream = fs.createWriteStream(download_folder)
+        const file_stream = fs.createWriteStream(output)
         const gz = zlib.createGzip()
         await new Promise((resolve, reject) => {
-            file_stream.on('finish', resolve)
-            file_stream.on('error', reject)
+            gz.on('finish', resolve)
             gz.on('error', reject)
-            request.on('error', reject)
 
             gz.pipe(file_stream)
-            https.get(download_url, res => res.pip(gz))
+            https.get(url, res => res.pip(gz))
         })
         gz.end()
         return true
@@ -59,11 +68,19 @@ const downalod = async (uri, output) => {
     }
 }
 
+const rename = async (from, to) => {
+    return await fs.promises.rename(from, to)
+}
 
 module.exports = {
     exists,
+    is_dir,
+    list_dir,
     mkdir,
     read_file,
     write_file,
     delete_file,
+    create_read_stream,
+    download,
+    rename,
 }

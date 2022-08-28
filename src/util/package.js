@@ -1,6 +1,6 @@
 const os = require('os')
 const path = require('path')
-const { delete_file, exists, downalod } = require('./files')
+const { delete_file, exists, download } = require('./files')
 
 const registry_path = path.join(os.homedir(), '.quark', 'registry')
 
@@ -26,8 +26,9 @@ const installer = {
             await delete_file(download_folder)
         }
         if (!await exists(download_folder)) {
-            await downalod(download_url, download_folder)
+            await download(download_url, download_folder)
         }
+        
         // TODO: return that package somehow?
     }
 }

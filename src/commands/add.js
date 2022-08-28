@@ -1,3 +1,4 @@
+const { parse_name, infer_name } = require('../dependency/install')
 const { install } = require('../util/package')
 const project = require('../util/project')
 
@@ -33,15 +34,26 @@ const development = Symbol()
 exports.handler = async argv => {
     let type = argv.development ? development : argv.peer ? peer : package
     
-    let { package: package_name, version, source } = parse_name(argv.package)
-    
+    let name = parse_name(argv.package)
+    if (!name) {
+        name = infer_name(argv.package)
+    }
+    if (!name) {
+        throw new Error('unable to parse package')
+    }
+    let { package: package_name, version, source } = name
+     
+    if (!package_name) {
+        // TODO: give hint on possible packages
+        throw new Error('unable to resolve package name')
+    }
     if (!source) {
-        // TODO: give hint on posible packages
-        throw new Error('package source not defined');
+        // TODO: give hint on possible packages
+        throw new Error('unable to resolve package source')
     }
     if (!version) {
         // TODO: get latest version available
-        throw new Error('package version not defined');
+        throw new Error('unable to resolve target package version')
     }
 
     let dependency = `${package_name}:${version}@${source}`
