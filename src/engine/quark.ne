@@ -59,19 +59,23 @@ MANYP[T] -> MANY[$T] (_ ","):? {%(value) => {
     return value[0]
 }%}
 
-ROOT -> (_ IMPORT):* (_ TOP_STATEMENT):*
+ROOT -> (_ IMPORT):* (_ TOP_STATEMENT {% ([_, statement]) => statement %}):* {% ([ imports, statements]) => {
+    return {
+        imports,
+        statements,
+    }
+} %}
 
-IMPORT_NAME -> %identifier (_ "as" _ %identifier):?
-IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
 IMPORT -> "import" _ (IMPORT_MAP | %identifier ( _ IMPORT_MAP):?) _ "from" _ STRING BREAK
+IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
+IMPORT_NAME -> %identifier (_ "as" _ %identifier):?
 
-TOP_STATEMENT -> BREAKED_STATEMENT | EXPORT_EXPRESSION 
+TOP_STATEMENT -> (STATEMENT | EXPORT_EXPRESSION)  _ BREAK {% did %}
 
-EXPORT_EXPRESSION -> "export" _ (EXPORT_NAME | "{" MANYP[EXPORT_NAME] "}") _ BREAK
+EXPORT_EXPRESSION -> "export" _ (EXPORT_NAME | "{" MANYP[EXPORT_NAME] "}")
 EXPORT_NAME -> %identifier | EXPRESSION _ "as" (%identifier | "default")
 
-BREAKED_STATEMENT -> STATEMENT _ BREAK
-STATEMENT -> PURE_STATEMENT | EXPRESSION
+STATEMENT -> (PURE_STATEMENT | EXPRESSION) {% did %}
 
 PURE_STATEMENT -> (
     BLOCK
