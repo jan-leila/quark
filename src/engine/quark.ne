@@ -214,7 +214,7 @@ VALUE -> (
     | MEMBER
     | INDEX
     | GROUPING
-) {% () => 'value' %}
+) {% did %}
 
 CALL ->  EXPRESSION _ ("(" | "?(") (_ MANY[EXPRESSION]):? _ ")"
 MEMBER ->  EXPRESSION _ ("." | "?.") _ %identifier
@@ -231,10 +231,32 @@ STRUCT -> ("{"
     )
     (_ OVERLOAD):*
     _
-"}")
+"}") {% chain(id, (value) => {
+    return {
+        type: "struct",
+        parameters: value[1][0].map(([_, value]) => value),
+        optinals: value[1][1].map(([_, value]) => value),
+        overloads: value[2].map(([_, value]) => value)
+    }
+}) %}
 
-STRUCT_PARAMETER -> DECLARATION_TYPE _ MANY[%identifier] _ BREAK
-STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ EXPRESSION] _ BREAK
+STRUCT_PARAMETER -> DECLARATION_TYPE _ MANY[%identifier] _ BREAK {% (value) => {
+    return {
+        type: value[0],
+        identifiers: value[2].map(id),
+    }
+}%}
+STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ EXPRESSION] _ BREAK{% (value) => {
+    return {
+        type: value[0],
+        identifiers: value[2].map((value) => {
+            return {
+                identifier: value[0],
+                default_value: value[4],
+            }
+        }),
+    }
+}%}
 OVERLOAD -> (
     UNARY_OPERATOR _  ("(" _ ")" _):?  STATEMENT
     | INFIX_OPERATOR _ INFIX_PARAMETERS _ STATEMENT
