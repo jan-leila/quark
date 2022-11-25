@@ -43,34 +43,42 @@
     const tag = (name, lambda) => (it) => [name, lambda?.(it) ?? it]
 
     const chain = (...args) => (init) =>  args.reduce((data, lambda) => lambda(data), init)
+
+    const debug = false
+    const formating = (lambda) => {
+        if (debug) {
+            return (value) => value
+        }
+        return lambda
+    }
 %}
 
 @lexer lexer
 
-MANY[T] -> $T (_ "," _ $T):* {%(value) => {
+MANY[T] -> $T (_ "," _ $T):* {% formating((value) => {
     return [
         value[0],
         ...value[1].map((next_value) => {
             return next_value[3]
         })
     ]
-}%}
-MANYP[T] -> MANY[$T] (_ ","):? {%(value) => {
+}) %}
+MANYP[T] -> MANY[$T] (_ ","):? {% formating((value) => {
     return value[0]
-}%}
+}) %}
 
-ROOT -> (_ IMPORT):* (_ TOP_STATEMENT {% ([_, statement]) => statement %}):* {% ([ imports, statements]) => {
+ROOT -> (_ IMPORT):* (_ TOP_STATEMENT {% ([_, statement]) => statement %}):* {% formating(([ imports, statements]) => {
     return {
         imports,
         statements,
     }
-} %}
+}) %}
 
 IMPORT -> "import" _ (IMPORT_MAP | %identifier ( _ IMPORT_MAP):?) _ "from" _ STRING BREAK
 IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
 IMPORT_NAME -> %identifier (_ "as" _ %identifier):?
 
-TOP_STATEMENT -> (STATEMENT | EXPORT_EXPRESSION)  _ BREAK {% did %}
+TOP_STATEMENT -> (STATEMENT | EXPORT_EXPRESSION) _ BREAK {% did %}
 
 EXPORT_EXPRESSION -> "export" _ (EXPORT_NAME | "{" MANYP[EXPORT_NAME] "}")
 EXPORT_NAME -> %identifier | EXPRESSION _ "as" (%identifier | "default")
@@ -93,7 +101,7 @@ PURE_STATEMENT -> (
     | TRY
 )
 
-BLOCK -> "(" _ (PURE_STATEMENT | STATEMENT (_ STATEMENT):+):? ")"
+BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")"
 
 TRY -> LABEL:? "try" _ STATEMENT (_ HANDLE):*
 HANDLE -> LABEL:? "handle" _ MANY[EXPRESSION] _ SINGLE_PARAMETER _ STATEMENT
@@ -101,7 +109,7 @@ HANDLE -> LABEL:? "handle" _ MANY[EXPRESSION] _ SINGLE_PARAMETER _ STATEMENT
 BREAK_STATMENT -> "break" (_ %identifier):?
 CONTINUE -> "continue" (_ %identifier):?
 RETURN -> "return" (_ EXPRESSION):?
-USE -> "use" (_ EXPRESSION):?
+USE -> "use" _ EXPRESSION
 
 CONTROL_CONDITION ->  "(" (_ STATEMENT):? _ EXPRESSION _ ")"
 
@@ -124,14 +132,14 @@ DECLARATION -> (
     DECLARATION_TYPE _ MANY[%identifier]
     | DECLARATION_TYPE _ ( %identifier | DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT) _ "=" _ EXPRESSION
 )
-DECLARATION_TYPE -> "let" | EXPRESSION (_ "?"):? (_ "[" _ "]" (_ "?"):?):*
+DECLARATION_TYPE -> "let" | EXPRESSION
 INLINE_SEQUENCE -> (EXPRESSION _):? (%identifier | DESTRUCTURE_STRUCT) _ "<<=" _ EXPRESSION
 
 LABEL -> (%identifier _ ":" _)
 
 @{%
-    const CHAIN_LEFT = 'CHAIN_LEFT'
-    const CHAIN_RIGHT = 'CHAIN_RIGHT'
+    const CHAIN_LEFT = Symbol('CHAIN_LEFT')
+    const CHAIN_RIGHT = Symbol('CHAIN_RIGHT')
 
     const unwrap_operation = (processor) => {
         return ([ tag, contents]) => {
@@ -178,9 +186,9 @@ LABEL -> (%identifier _ ":" _)
 %}
 CHAIN[LEFT] -> $LEFT {% chain(id, tag(CHAIN_LEFT)) %} | $NEXT {% chain(did, tag(CHAIN_RIGHT)) %}
 
-INFIX_OPERATOR[  SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN _ $NEXT ] {% chain(id, unwrap_operation(operation)) %}
-PREFIX_OPERATOR[ SELF, TOKEN, NEXT] -> CHAIN[$TOKEN _ $SELF          ] {% chain(id, unwrap_operation()) %}
-POSTFIX_OPERATOR[SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN         ] {% chain(id, unwrap_operation()) %}
+INFIX_OPERATOR[  SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN _ $NEXT] {% chain(id, unwrap_operation(operation)) %}
+PREFIX_OPERATOR[ SELF, TOKEN, NEXT] -> CHAIN[$TOKEN _ $SELF         ] {% chain(id, unwrap_operation()) %}
+POSTFIX_OPERATOR[SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN        ] {% chain(id, unwrap_operation()) %}
 
 EXPRESSION  -> INFIX_OPERATOR[  %identifier, %assignment                     {% id %}, SEQUENCE    ] {% id %}
 SEQUENCE    -> INFIX_OPERATOR[  SEQUENCE,    ">>="                           {% id %}, WITH        ] {% id %}
@@ -197,10 +205,14 @@ COMPARISON  -> INFIX_OPERATOR[  COMPARISON,  (">=" | "<=" | "<" | ">")       {% 
 SHIFT       -> INFIX_OPERATOR[  SHIFT,       ("<<<" | ">>>" | "<<" | ">>")   {% id %}, SUM         ] {% id %}
 SUM         -> INFIX_OPERATOR[  SUM,         ("+" | "-")                     {% id %}, PRODUCT     ] {% id %}
 PRODUCT     -> INFIX_OPERATOR[  PRODUCT,     ("*" | "/" | "%")               {% id %}, POWER       ] {% id %}
-POWER       -> INFIX_OPERATOR[  POWER,       "**"                            {% id %}, INFIX       ] {% id %}
-INFIX       -> INFIX_OPERATOR[  INFIX,       PREFIX                          {% id %}, PREFIX      ] {% id %}
+POWER       -> INFIX_OPERATOR[  POWER,       "**"                            {% id %}, PREFIX      ] {% id %}
 PREFIX      -> PREFIX_OPERATOR[ PREFIX,      ("!" | "~" | "-" | "++" | "--") {% id %}, POSTFIX     ] {% id %}
-POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--") {% id %}, VALUE       ] {% id %}
+POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--") {% id %}, CALL        ] {% id %}
+
+CALL        -> POSTFIX_OPERATOR[ CALL  , (("(" | "?(") (_ MANYP[EXPRESSION]):? _ ")") {% id %}, MEMBER] {% id %}
+MEMBER      -> POSTFIX_OPERATOR[ MEMBER, (("." | "?.") _ %identifier)                 {% id %}, INDEX ] {% id %}
+INDEX       -> POSTFIX_OPERATOR[ INDEX , (("[" | "?[") _ EXPRESSION "]")              {% id %}, VALUE ] {% id %}
+
 
 VALUE -> (
     %identifier
@@ -210,45 +222,40 @@ VALUE -> (
     | FUNCTION
     | ANONYMOUS_ITERATOR
     | STRUCT
-    | CALL
-    | MEMBER
-    | INDEX
     | GROUPING
 ) {% did %}
 
-CALL ->  EXPRESSION _ ("(" | "?(") (_ MANY[EXPRESSION]):? _ ")"
-MEMBER ->  EXPRESSION _ ("." | "?.") _ %identifier
-INDEX -> EXPRESSION _ ("[" | "?[") _ EXPRESSION "]"
 GROUPING -> "(" _ EXPRESSION _ ")"
 
 STRUCT -> ("{"
     (
         (_ STRUCT_PARAMETER):+
-        (_ STRUCT_OPTINAL):*
         |
-        (_ STRUCT_PARAMETER):*
         (_ STRUCT_OPTINAL):+
-    )
+        |
+        (_ STRUCT_PARAMETER):+
+        (_ STRUCT_OPTINAL):+
+    ):?
     (_ OVERLOAD):*
     _
-"}") {% chain(id, (value) => {
+"}") {% chain(id, formating((value) => {
     return {
         type: "struct",
-        parameters: value[1][0].map(([_, value]) => value),
-        optinals: value[1][1].map(([_, value]) => value),
+        parameters: value[1]?.[0]?.map(([_, value]) => value) ?? [],
+        optionals: value[1]?.[1]?.map(([_, value]) => value) ?? [],
         overloads: value[2].map(([_, value]) => value)
     }
-}) %}
+})) %}
 
-STRUCT_PARAMETER -> DECLARATION_TYPE _ MANY[%identifier] _ BREAK {% (value) => {
+STRUCT_PARAMETER -> DECLARATION_TYPE _ MANY[%identifier] BREAK {% formating((value) => {
     return {
-        type: value[0],
+        type: did(value),
         identifiers: value[2].map(id),
     }
-}%}
-STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ EXPRESSION] _ BREAK{% (value) => {
+}) %}
+STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ EXPRESSION] BREAK {% formating((value) => {
     return {
-        type: value[0],
+        type: did(value),
         identifiers: value[2].map((value) => {
             return {
                 identifier: value[0],
@@ -256,13 +263,13 @@ STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ EXPRESSION] _ BREA
             }
         }),
     }
-}%}
+}) %}
 OVERLOAD -> (
     UNARY_OPERATOR _  ("(" _ ")" _):?  STATEMENT
     | INFIX_OPERATOR _ INFIX_PARAMETERS _ STATEMENT
     | INFIX_PARAMETERS _ INFIX_OPERATOR _ STATEMENT
 )
-INFIX_PARAMETERS -> (SINGLE_PARAMETER | FUNCTION_PARAMETER) 
+INFIX_PARAMETERS -> SINGLE_PARAMETER
 INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") 
 UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") 
 
