@@ -41,12 +41,13 @@ let misc_tokens = [
 
 	'>>=', '<<=',
 
-	'??',
+	'??','..',
 	'?.', '?(', '?[',
 
 	'?', ':',
 	'.', '(', '[',
 	',', ')', ']',
+	'@', ';'
 ];
 
 
@@ -80,6 +81,19 @@ let lexer = moo.states({
 		lcbracket: { match: '{', push: 'main' },
 		rcbracket: { match: '}', pop: true },
 
+		identifier: {
+			match: /\w+/, type: moo.keywords({
+				keywords,
+			})
+		},
+		filepart: {
+			match: /[-_A-Za-z0-9][-_.A-Za-z0-9]*/,
+			type: moo.keywords({
+				keywords,
+			})
+		},
+		keywords,
+
 		operator: {
 			match: operator,
 			type: moo.keywords({
@@ -93,14 +107,6 @@ let lexer = moo.states({
 			}),
 		},
 		assignment,
-
-		identifier: {
-			match: /\w+/, type: moo.keywords({
-				keywords,
-			})
-		},
-		keywords,
-		break: ';',
 	},
 	template_string: {
 		template_string_interpreter: { match: '${', push: 'main' },
@@ -112,7 +118,7 @@ let lexer = moo.states({
 		regex_content: /(?:(?:\\.)?[^\\\/\n]+)+/,
 		// match the end and any flags that go with it,
 		regex_end: { match: /\/[gmiy]*/, pop: true },
-	}
+	},
 });
 
 let running
@@ -129,8 +135,7 @@ module.exports = {
 		if (running) {
 			running = false
 			return {
-				type: 'end',
-				value: '',
+				type: 'file_end',
 				text: '',
 			}
 		}
