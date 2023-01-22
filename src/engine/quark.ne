@@ -67,21 +67,78 @@ MANYP[T] -> MANY[$T] (_ ","):? {% formating((value) => {
     return value[0]
 }) %}
 
-ROOT -> (_ IMPORT):* (_ TOP_STATEMENT {% ([_, statement]) => statement %}):* {% formating(([ imports, statements]) => {
+ROOT -> (_ IMPORT {% formating((value) => value[1]) %}):* (_ TOP_STATEMENT {% ([_, statement]) => statement %}):* {% formating(([ imports, statements]) => {
     return {
         imports,
         statements,
     }
 }) %}
 
-IMPORT -> "import" _ (IMPORT_MAP | %identifier ( _ IMPORT_MAP):?) _ "from" _ STRING BREAK
-IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}"
-IMPORT_NAME -> %identifier (_ "as" _ %identifier):?
+IMPORT -> "import" _ (IMPORT_MAP {% formating((value) => {
+    return {
+        default: null,
+        named: value[0],
+    }
+}) %} | %identifier (_ IMPORT_MAP):? {% formating((value) => {
+    return {
+        default: value[0],
+        named: value[1]?.[1] ?? [],
+    }
+}) %}) _ "from" _ IMPORT_TARGET BREAK {% formating((value) => {
+    return {
+        imports: value[2],
+        from: value[6],
+    }
+}) %}
+IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}" {% formating((value) => {
+    return value[1]?.[1] ?? []
+}) %}
+IMPORT_NAME -> %identifier (_ "as" _ %identifier):? {% formating((value) => {
+    return {
+        target: value[0],
+        as: value[1]?.[3] ?? value[0],
+    }
+})%}
 
-TOP_STATEMENT -> (STATEMENT | EXPORT_EXPRESSION) _ BREAK {% did %}
+IMPORT_TARGET -> (FILE | DEPENDENCY) {% formating(did) %}
+DEPENDENCY -> FILE_PATH ("@" FILE_PART):? {% formating((value) => {
+    return {
+        type: 'dependency',
+        source: value[1]?.[1],
+        package: value[0],
+    }
+})%}
+FILE -> ("." {% formating(() => 0) %} | ".." ("/" ".."):* {% formating((value) => 1 + value[1].length) %}):? "/" FILE_PATH {% formating((value) => {
+    return {
+        type: 'file',
+        path: value[2],
+        relitive: value[0] ?? -1,
+    }
+}) %}
+FILE_PATH -> FILE_PART ("/" FILE_PART):* {% formating((value) => {
+    return [value[0], ...(value[1].map((value) => value[1]))]
+}) %}
+FILE_PART -> (%identifier | %filepart) {% formating(did) %}
 
-EXPORT_EXPRESSION -> "export" _ (EXPORT_NAME | "{" MANYP[EXPORT_NAME] "}")
-EXPORT_NAME -> %identifier | EXPRESSION _ "as" (%identifier | "default")
+TOP_STATEMENT -> (STATEMENT | EXPORT_STATEMENT) _ BREAK {% did %}
+
+EXPORT_STATEMENT -> "export" _ MANYP[EXPORT_NAME] {% formating((value) => {
+    return {
+        type: 'export',
+        targets: value[2]
+    }
+})%}
+EXPORT_NAME -> %identifier {% formating((value) => {
+    return {
+        target: value[0],
+        as: value[0],
+    }
+}) %} | EXPRESSION _ "as" _ (%identifier | "default") {% formating(() => {
+    return {
+        target: value[0],
+        as: value[3],
+    }
+}) %}
 
 STATEMENT -> (PURE_STATEMENT | EXPRESSION) {% did %}
 
@@ -99,9 +156,14 @@ PURE_STATEMENT -> (
     | DO_WHILE
     | FOR
     | TRY
-)
+) {% did %}
 
-BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")"
+BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")" {% (value) => {
+    return {
+        type: 'block',
+        contents: value[1]?.[1],
+    }
+} %}
 
 TRY -> LABEL:? "try" _ STATEMENT (_ HANDLE):*
 HANDLE -> LABEL:? "handle" _ MANY[EXPRESSION] _ SINGLE_PARAMETER _ STATEMENT
@@ -129,11 +191,17 @@ ENHANCED_FOR_CONDITIONS -> FUNCTION_PARAMETER _ ":" _ EXPRESSION
 FOR -> LABEL:? "for" _ "(" _ ENHANCED_FOR_CONDITIONS _ ")" _ STATEMENT
 
 DECLARATION -> (
-    DECLARATION_TYPE _ MANY[%identifier]
-    | DECLARATION_TYPE _ ( %identifier | DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT) _ "=" _ EXPRESSION
-)
-DECLARATION_TYPE -> "let" | EXPRESSION
-INLINE_SEQUENCE -> (EXPRESSION _):? (%identifier | DESTRUCTURE_STRUCT) _ "<<=" _ EXPRESSION
+    DECLARATION_TYPE _ MANYP[%identifier {% id %}] (_ "=" _ EXPRESSION):? {% (value) => {
+        return {
+            type: 'declaration',
+            data_type: value[0],
+            names: value[2].map(id),
+            value: value[3]?.[3],
+        }
+    }%}
+) {% id %}
+DECLARATION_TYPE -> ("let" | EXPRESSION) {% did %}
+INLINE_SEQUENCE -> (EXPRESSION _):? %identifier _ "<<=" _ EXPRESSION
 
 LABEL -> (%identifier _ ":" _)
 
@@ -157,30 +225,26 @@ LABEL -> (%identifier _ ":" _)
             type: 'operation',
             class: 'infix',
             operation: contents[2][0],
-            value: {
-                left: contents[0][0],
-                right: contents[4][0],
-            }
+            first: contents[0][0],
+            second: contents[4][0],
         }
     }
 
-    const prefix = (name) => {
-        return (contents) => {
-            return {
-                type: 'expression',
-                expression: name,
-                contents: contents,
-            }
+    const prefix = (contents) => {
+        return {
+            type: 'operation',
+            class: 'prefix',
+            operation: contents[0][0],
+            contents: contents[2][0],
         }
     }
 
-    const postfix = (name) => {
-        return (contents) => {
-            return {
-                type: 'expression',
-                expression: name,
-                contents: contents,
-            }
+    const postfix = (contents) => {
+        return {
+            type: 'operation',
+            class: 'postfix',
+            operation: contents[0][0],
+            contents: contents[2],
         }
     }
 %}
@@ -209,10 +273,9 @@ POWER       -> INFIX_OPERATOR[  POWER,       "**"                            {% 
 PREFIX      -> PREFIX_OPERATOR[ PREFIX,      ("!" | "~" | "-" | "++" | "--") {% id %}, POSTFIX     ] {% id %}
 POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--") {% id %}, CALL        ] {% id %}
 
-CALL        -> POSTFIX_OPERATOR[ CALL  , (("(" | "?(") (_ MANYP[EXPRESSION]):? _ ")") {% id %}, MEMBER] {% id %}
+CALL        -> POSTFIX_OPERATOR[ CALL  , (("(" | "?(") (_ MANYP[(SEQUENCE | %identifier _ "=" _ EXPRESSION)]):? _ ")") {% id %}, MEMBER] {% id %}
 MEMBER      -> POSTFIX_OPERATOR[ MEMBER, (("." | "?.") _ %identifier)                 {% id %}, INDEX ] {% id %}
 INDEX       -> POSTFIX_OPERATOR[ INDEX , (("[" | "?[") _ EXPRESSION "]")              {% id %}, VALUE ] {% id %}
-
 
 VALUE -> (
     %identifier
@@ -227,7 +290,7 @@ VALUE -> (
 
 GROUPING -> "(" _ EXPRESSION _ ")"
 
-STRUCT -> ("{"
+STRUCT -> (EXPRESSION _ ":" _):? ("{"
     (
         (_ STRUCT_PARAMETER):+
         |
@@ -236,20 +299,25 @@ STRUCT -> ("{"
         (_ STRUCT_PARAMETER):+
         (_ STRUCT_OPTINAL):+
     ):?
-    (_ OVERLOAD):*
+    (_ STRUCT_PROPERTY):*
+    (_ STRUCT_METHOD):*
+    (_ STRUCT_OVERLOAD):*
     _
-"}") {% chain(id, formating((value) => {
+"}") {% chain(formating((value) => {
     return {
         type: "struct",
-        parameters: value[1]?.[0]?.map(([_, value]) => value) ?? [],
-        optionals: value[1]?.[1]?.map(([_, value]) => value) ?? [],
-        overloads: value[2].map(([_, value]) => value)
+        extends: value[0]?.[0],
+        parameters: value[1][1]?.[0]?.map(([_, value]) => value) ?? [],
+        optionals: value[1][1]?.[1]?.map(([_, value]) => value) ?? [],
+        properties: value[1][2].map(([_, value]) => value),
+        methods: value[1][3].map(([_, value]) => value),
+        overloads: value[1][4].map(([_, value]) => value),
     }
 })) %}
 
 STRUCT_PARAMETER -> DECLARATION_TYPE _ MANY[%identifier] BREAK {% formating((value) => {
     return {
-        type: did(value),
+        type: value[0],
         identifiers: value[2].map(id),
     }
 }) %}
@@ -264,54 +332,78 @@ STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ EXPRESSION] BREAK 
         }),
     }
 }) %}
-OVERLOAD -> (
-    UNARY_OPERATOR _  ("(" _ ")" _):?  STATEMENT
-    | INFIX_OPERATOR _ INFIX_PARAMETERS _ STATEMENT
-    | INFIX_PARAMETERS _ INFIX_OPERATOR _ STATEMENT
-)
-INFIX_PARAMETERS -> SINGLE_PARAMETER
-INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") 
-UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") 
+
+STRUCT_PROPERTY -> %identifier _ "=" _ EXPRESSION BREAK {% formating((value) => {
+    return {
+        identifier: value[0],
+        value: value[4],
+    }
+}) %}
+
+STRUCT_METHOD -> %identifier _ FUNCTION {% formating((value) => {
+    return {
+        identifier: value[0],
+        value: value[2],
+    }
+}) %}
+
+STRUCT_OVERLOAD -> (
+    UNARY_OPERATOR (_ "(" _ ")"):? _ STATEMENT {% (value) => {
+        return {
+            type: 'unary',
+            operator: value[0],
+            statement: value[3]
+        }
+    }%}
+    | INFIX_OPERATOR _ SINGLE_PARAMETER _ STATEMENT {% (value) => {
+        return {
+            type: 'infix_left',
+            operator: value[0],
+            parameter: value[2],
+            statement: value[4]
+        }
+    }%}
+    | SINGLE_PARAMETER _ INFIX_OPERATOR _ STATEMENT {% (value) => {
+        return {
+            type: 'infix_right',
+            operator: value[2],
+            parameter: value[0],
+            statement: value[4]
+        }
+    }%}
+) {% id %}
+INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") {% id %}
+UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") {% id %}
 
 FUNCTION -> (
     FUNCTION_PARAMETERS | ENCLOSED_PARAMETERS
 ) _ "=>" _ STATEMENT
 ENCLOSED_PARAMETERS -> "(" (_ FUNCTION_PARAMETERS):? _ ")"
 FUNCTION_PARAMETERS -> MANY[FUNCTION_PARAMETER]
-FUNCTION_PARAMETER -> (DECLARATION_TYPE _):? (%identifier | (%identifier _ ":" _):? (DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT))
-SINGLE_PARAMETER -> "(" _ (FUNCTION_PARAMETER _):? ")"
-
-DESTRUCTURE_STRUCT -> ( "{"
-    (
-        _ MANY[DESTRUCTURED_STRUCT_MEMBER]
-        ( _ "," (_ SPREAD_MEMBER):?):?
-    ):?
-_ "}")
-DESTRUCTURED_STRUCT_MEMBER -> (EXPRESSION _):? (
-    %identifier "?":? _ (
-        "=" _ EXPRESSION
-        | ":" _ (DESTRUCTURE_ITERATOR | DESTRUCTURE_STRUCT)
-    ):?
-)
-
-DESTRUCTURE_ITERATOR -> ( "["
-    (
-        _ MANY[(DESTRUCTURE_ITERATOR_MEMBER)]
-        ( _ "," (_ SPREAD_MEMBER):?):?
-    ):?
-_ "]")
-DESTRUCTURE_ITERATOR_MEMBER -> (EXPRESSION _):? (
-    %identifier "?" (_ "=" %identifier):?
-    | DESTRUCTURE_ITERATOR
-    | DESTRUCTURE_STRUCT
-)
-
-SPREAD_MEMBER -> "..." %identifier
+FUNCTION_PARAMETER -> (
+    (DECLARATION_TYPE _):? (
+        %identifier {% (value) => {
+            return {
+                type: 'identifier',
+                value: value[0],
+            }
+        } %}
+    )
+) {% chain(id, (value) => {
+    return {
+        type: value[0]?.[0],
+        name: value[1]
+    }
+}) %}
+SINGLE_PARAMETER -> (
+    "(" _ (FUNCTION_PARAMETER _):? ")" {% (value) => {
+        return value[2]?.[0]
+    } %}
+) {% id %}
 
 ANONYMOUS_ITERATOR -> "["
-    (_ MANYP[ANONYMOUS_ITERATOR_VALUE]):? _
+    (_ MANYP[EXPRESSION]):? _
 "]"
-ANONYMOUS_ITERATOR_VALUE -> EXPRESSION | "..." EXPRESSION
 
 # TODO: real regex parsing
 REGEX -> %regex %regex_content %regex_end 
