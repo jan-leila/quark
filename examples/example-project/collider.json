@@ -1,34 +1,16 @@
+// information needed for publishing
 {
+	// identifier for project
+	"identifier": "",
+	// locations the project is hosted at
 	"hosts": [
 		{
+			// where is the project hosted at
 			"url": "",
-			"name": "",
+			// short name for project
+			"alias": "",
+			// what type of location is this
 			"type": ""
 		}
-	],
-	"repositories": [
-		{
-			"type": "",
-			"url": ""
-		}
-	],
-	"contributors": [
-		{
-			"name": "",
-			"email": "",
-			"url": "",
-			"funding": [
-				{
-					"type": "",
-					"url": ""
-				}
-			]
-		}
-	],
-	"description": "",
-	"website": "",
-	"issues": "",
-	"keywords": [
-		"", "", ""
 	]
 }

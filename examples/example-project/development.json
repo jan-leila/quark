@@ -1,3 +1,4 @@
+// information needed for development
 {
     "scripts": {
         "start": "quark src/index.qk"

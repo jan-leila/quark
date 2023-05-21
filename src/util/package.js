@@ -8,8 +8,8 @@ const sources = {
     github: Symbol()
 }
 
-const use_loader = async (lambda) => {
-    return (opts) => {
+const use_loader = (lambda) => {
+    return async (opts) => {
         let package = await lambda(opts)
         if (!package) {
             return installer[opts.type](opts)

@@ -12,7 +12,7 @@ const install = async (package, version, source, type) => {    if (!type) {
     return await sources[type](source).install(package, version)
 }
 
-const locate = (package, version, source, type) => {
+const locate = async (package, version, source, type) => {
     if (!source) {
         throw new Error('no source found')
     }
@@ -23,7 +23,7 @@ const locate = (package, version, source, type) => {
         throw new Error('no source type found')
     }
 
-    // version
+    // TODO: version
 
     return await sources[type](source).location(package, version)
 }

@@ -37,7 +37,7 @@ const identifier = async ({ storage, cache }, { package, version }) => {
     return location
 }
 
-const installer = ({ storage, cache }, { package, version }, location) => {
+const installer = async ({ storage, cache }, { package, version }, location) => {
     if (location === undefined) {
         location = path.join(storage, package, version)
     }
