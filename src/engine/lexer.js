@@ -3,7 +3,7 @@ const moo = require('moo');
 let keywords = [
 	'import', 'from', 'as', 'export', 'default',
 	'if', 'else', 'switch', 'case', 'do', 'while', 'for', 'break', 'continue', 'return',
-	'try', 'with', 'handle', 'use', 'overload',
+	'with', 'handle', 'use',
 	'let', 'null',
 ];
 
@@ -37,17 +37,17 @@ let operator = [
 
 let misc_tokens = [
 	'...',
-	'=>',
+	'=>', '->',
 
 	'>>=', '<<=',
 
-	'??','..',
+	'??','..', '::',
 	'?.', '?(', '?[',
 
 	'?', ':',
 	'.', '(', '[',
 	',', ')', ']',
-	'@', ';'
+	'@'
 ];
 
 
@@ -64,6 +64,7 @@ let lexer = moo.states({
 		hex: /0x[0-9a-fA-F]+/,
 		int: /[0-9]+(?![0-9]*[.])/,
 		float: /(?:0|[1-9][0-9]*)(?:\.[0-9])?[0-9]*/,
+		exponential: /(?:0|[1-9][0-9]*)(?:\.[0-9])?[0-9]*e[0-9]+(?![0-9]*[.])/,
 		color: [
 			/#[0-9a-fA-F]{3}/,
 			/#[0-9a-fA-F]{6}/,
@@ -90,18 +91,20 @@ let lexer = moo.states({
 			match: /[-_A-Za-z0-9][-_.A-Za-z0-9]*/,
 			type: moo.keywords({
 				keywords,
+				operator,
+				misc_tokens,
 			})
 		},
 		keywords,
 
-		operator: {
-			match: operator,
+		misc_tokens: {
+			match: misc_tokens,
 			type: moo.keywords({
 				assignment,
 			}),
 		},
-		misc_tokens: {
-			match: misc_tokens,
+		operator: {
+			match: operator,
 			type: moo.keywords({
 				assignment,
 			}),

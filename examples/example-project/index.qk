@@ -1,0 +1,98 @@
+import type from types@internals
+import print from io@internals
+
+let generic_vector = (type number_type) => (
+
+	return {
+		number_type x, y, z
+
+		scale(number_type scaler) (
+			generic_vector(number_type)(
+				x * scaler, 
+				y * scaler, 
+				z * scaler,
+			)
+		)
+
+		magnitude = ((x * x + y * y + z * z) ^ 0.5)
+		normalize = scale(1 / magnitude)
+
+		convert(type target_type, number_type -> target_type type_converter) (
+			return generic_vector(target_type)(
+				type_converter(x * scaler),
+				type_converter(y * scaler),
+				type_converter(z * scaler),
+			)
+		)
+
+		* (number_type scaler) (
+			scale(scaler)
+		)
+	}
+)
+
+let int_vector = generic_vector(::int)
+let float_vector = generic_vector(::float)
+let double_vector = generic_vector(::double)
+
+
+
+
+
+
+
+
+
+
+
+let position = {
+	float x, y, z
+
+	+ (float_vector distance) (
+		position(x + distance.x, y + distance.y, z + distance.z)
+	)
+}
+let player = {
+	position pos
+	distance velocity
+	string name
+	int health
+
+	move (vector distance) (
+		player(pos + vector, name, health)
+	)
+}
+
+let name = () => 6
+
+test = 5
+
+/*
+let zombie = {
+	position pos
+	distance velocity
+	int health
+
+	move (vector distance) (
+		zombie(pos + vector, name, health)
+	)
+}
+
+let generic_tick = (type tick_type) =>
+	(
+		((tick_type) -> vector) get_velocity,
+		((tick_type, vector) -> tick_type) apply_movement
+	) =>
+		(tick_type entity) => (
+			let time = get_delta_time()
+			return apply_movement(entity, get_velocity(entity) * get_delta_time())
+		)
+
+let player_ticker = generic_tick(player)(player_entity::velocity, player_entity::move)
+let zombie_ticker = generic_tick(zombie)(zombie_entity::velocity, zombie_entity::move)
+
+let player_instance = player()
+let zombies = [zombie(), zombie(), zombie(), zombie(), zombie()]
+player = player_ticker(player_instance)
+zombies = zombies.map((zombie_instance) => zombie_ticker(zombie_instance))
+*/
