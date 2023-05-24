@@ -290,7 +290,7 @@ INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSIO
         value: value[6],
     }
 } %}
-DECLARATION_TYPE -> ("let" | EXPRESSION) {% did %}
+DECLARATION_TYPE -> ("let" | EXPRESSION "?":? (("[" "]") "?":?):*) {% did %}
 
 LABEL -> (%identifier _ ":" _) {% did %}
 
@@ -511,10 +511,10 @@ FUNCTION -> MULTI_FUNCTION_ARGUMENT _ "=>" _ UNSCOPED_STATEMENT
 
 MULTI_FUNCTION_ARGUMENT -> "(" _ (MANYP[FUNCTION_ARGUMENT] _):? ")" {% (value) => value[2]?.[0] %}
 SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% (value) => value[2]?.[0] %}
-FUNCTION_ARGUMENT -> EXPRESSION _ DECLARATION_IDENTIFIER {% formating((value) => {
+FUNCTION_ARGUMENT -> (EXPRESSION _):? DECLARATION_IDENTIFIER {% formating((value) => {
     return {
-        type: value[0],
-        name: value[2]
+        type: value[0][0],
+        name: value[1]
     }
 }) %}
 # TODO: destructuring objects and arrays

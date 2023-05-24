@@ -1,23 +1,22 @@
 import type from types@internals
 import print from io@internals
 
-let generic_vector = (type number_type) => (
-
+let generic_vector = (number_type) => (
 	return {
 		number_type x, y, z
 
-		scale(number_type scaler) (
+		scale(scale_factor) (
 			generic_vector(number_type)(
-				x * scaler, 
-				y * scaler, 
-				z * scaler,
+				x * scale_factor,
+				y * scale_factor,
+				z * scale_factor,
 			)
 		)
 
 		magnitude = ((x * x + y * y + z * z) ^ 0.5)
 		normalize = scale(1 / magnitude)
 
-		convert(type target_type, number_type -> target_type type_converter) (
+		convert(type target_type, (number_type) -> target_type type_converter) (
 			return generic_vector(target_type)(
 				type_converter(x * scaler),
 				type_converter(y * scaler),
@@ -35,12 +34,7 @@ let int_vector = generic_vector(::int)
 let float_vector = generic_vector(::float)
 let double_vector = generic_vector(::double)
 
-
-
-
-
-
-
+double_vector[] name = [double_vector(0,0,0)]
 
 
 
@@ -67,7 +61,7 @@ let name = () => 6
 
 test = 5
 
-/*
+
 let zombie = {
 	position pos
 	distance velocity
@@ -95,4 +89,3 @@ let player_instance = player()
 let zombies = [zombie(), zombie(), zombie(), zombie(), zombie()]
 player = player_ticker(player_instance)
 zombies = zombies.map((zombie_instance) => zombie_ticker(zombie_instance))
-*/
