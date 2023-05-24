@@ -41,7 +41,7 @@ let misc_tokens = [
 
 	'>>=', '<<=',
 
-	'??','..', '::',
+	'??', '::',
 	'?.', '?(', '?[',
 
 	'?', ':',
@@ -82,6 +82,14 @@ let lexer = moo.states({
 		lcbracket: { match: '{', push: 'main' },
 		rcbracket: { match: '}', pop: true },
 
+		filepart_tokens: ['..'],
+		misc_tokens: {
+			match: misc_tokens,
+			type: moo.keywords({
+				assignment,
+			}),
+		},
+
 		identifier: {
 			match: /\w+/, type: moo.keywords({
 				keywords,
@@ -92,17 +100,10 @@ let lexer = moo.states({
 			type: moo.keywords({
 				keywords,
 				operator,
-				misc_tokens,
 			})
 		},
 		keywords,
 
-		misc_tokens: {
-			match: misc_tokens,
-			type: moo.keywords({
-				assignment,
-			}),
-		},
 		operator: {
 			match: operator,
 			type: moo.keywords({
