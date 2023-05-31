@@ -58,7 +58,6 @@ let name = () => 6
 
 test = 5
 
-
 let zombie = {
 	position pos
 	distance velocity
@@ -69,18 +68,21 @@ let zombie = {
 	)
 }
 
-let generic_tick = (type tick_type) =>
-	(
-		((tick_type) -> vector) get_velocity,
-		((tick_type, vector) -> tick_type) apply_movement
-	) =>
+let generic_tick = (type tick_type) => (
+		(tick_type) -> vector get_velocity,
+		(tick_type, vector) -> tick_type apply_movement
+	) => (
 		(tick_type entity) => (
 			let time = get_delta_time()
-			return apply_movement(entity, get_velocity(entity) * get_delta_time())
+			return apply_movement(
+				entity,
+				get_velocity(entity) * get_delta_time()
+			)
 		)
+	)
 
-let player_ticker = generic_tick(player)(player_entity::velocity, player_entity::move)
-let zombie_ticker = generic_tick(zombie)(zombie_entity::velocity, zombie_entity::move)
+let player_ticker = generic_tick(player)(player::velocity, player::move)
+let zombie_ticker = generic_tick(zombie)(zombie::velocity, zombie::move)
 
 let player_instance = player()
 let zombies = [zombie(), zombie(), zombie(), zombie(), zombie()]

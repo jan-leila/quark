@@ -44,7 +44,7 @@
 
     const chain = (...args) => (init) =>  args.reduce((data, lambda) => lambda(data), init)
 
-    const debug = true
+    const debug = false
     const formating = (lambda) => {
         if (debug) {
             return (value) => value
@@ -67,7 +67,7 @@ MANYP[T] -> MANY[$T] (_ ","):? {% formating((value) => {
     return value[0]
 }) %}
 
-ROOT -> (_ IMPORT {% formating((value) => value[1]) %}):* (_ TOP_STATEMENT {% ([_, statement]) => statement %}):* {% formating(([ imports, statements]) => {
+ROOT -> (_ IMPORT {% formating((value) => value[1]) %}):* (_ TOP_STATEMENT {% formating(([_, statement]) => statement) %}):* {% formating(([ imports, statements]) => {
     return {
         imports,
         statements,
@@ -120,7 +120,7 @@ FILE_PATH -> FILE_PART ("/" FILE_PART):* {% formating((value) => {
 }) %}
 FILE_PART -> (%identifier | %filepart) {% formating(did) %}
 
-TOP_STATEMENT -> (STATEMENT | EXPORT_STATEMENT) _ BREAK {% did %}
+TOP_STATEMENT -> (STATEMENT | EXPORT_STATEMENT) _ BREAK {% formating(did) %}
 
 EXPORT_STATEMENT -> "export" _ MANYP[EXPORT_NAME] {% formating((value) => {
     return {
@@ -140,14 +140,14 @@ EXPORT_NAME -> %identifier {% formating((value) => {
     }
 }) %}
 
-STATEMENT -> (PURE_STATEMENT | EXPRESSION) {% did %}
+STATEMENT -> (PURE_STATEMENT | EXPRESSION) {% formating(did) %}
 
-UNSCOPED_STATEMENT -> (PURE_UNSCOPED_STATEMENT | EXPRESSION) {% did %}
+UNSCOPED_STATEMENT -> (PURE_UNSCOPED_STATEMENT | EXPRESSION) {% formating(did) %}
 
 PURE_STATEMENT -> (
     PURE_UNSCOPED_STATEMENT
     | DECLARATION
-) {% did %}
+) {% formating(did) %}
 
 PURE_UNSCOPED_STATEMENT -> (
     BLOCK
@@ -207,10 +207,10 @@ IF -> LABEL:? "if" _ CONDITION _ STATEMENT (_ "else" _ STATEMENT {% formating((v
         else: value[6]
     }
 }) %}
-CASE -> "case" _ "(" _ MANY[EXPRESSION] _ ")" {% (value) => {
+CASE -> "case" _ "(" _ MANY[EXPRESSION] _ ")" {% formating((value) => {
     return value[4]
-} %}
-SWITCH -> LABEL:? "switch" _ CONDITION _ "(" (_ CASE _ STATEMENT):* (_ "default" (_ CASE):? _ STATEMENT):? _ ")" {% () => {
+}) %}
+SWITCH -> LABEL:? "switch" _ CONDITION _ "(" (_ CASE _ STATEMENT):* (_ "default" (_ CASE):? _ STATEMENT):? _ ")" {% formating(() => {
     return {
         type: 'switch',
         label: value[0],
@@ -226,47 +226,47 @@ SWITCH -> LABEL:? "switch" _ CONDITION _ "(" (_ CASE _ STATEMENT):* (_ "default"
             contents: value[7]?.[5]
         }
     }
-} %}
-WHILE -> LABEL:? "while" _ CONDITION _ UNSCOPED_STATEMENT {% (value) => {
+}) %}
+WHILE -> LABEL:? "while" _ CONDITION _ UNSCOPED_STATEMENT {% formating((value) => {
     return {
         type: 'while',
         label: value[0],
         condition: value[3],
         contents: value[5]
     }
-} %}
-DO_IF -> DO _ "if" _ CONDITION {% (value) => {
+}) %}
+DO_IF -> DO _ "if" _ CONDITION {% formating((value) => {
     return {
         ...value[0],
         type: 'do_if',
         condition: value[4]
     }
-} %}
-DO_WHILE -> DO _ "while" _ CONDITION {% (value) => {
+}) %}
+DO_WHILE -> DO _ "while" _ CONDITION {% formating((value) => {
     return {
         ...value[0],
         type: 'do_while',
         condition: value[4]
     }
-} %}
+}) %}
 
-DO -> LABEL:? "do" _ UNSCOPED_STATEMENT (_ HANDLE):* {% (value) => {
+DO -> LABEL:? "do" _ UNSCOPED_STATEMENT (_ HANDLE):* {% formating((value) => {
     return {
         type: 'do',
         label: value[0],
         handles: value[4].map((value) => value[1]),
         contents: value[3]
     }
-} %}
-HANDLE -> "handle" _ MANY[EXPRESSION] _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% (value) => {
+}) %}
+HANDLE -> "handle" _ MANY[EXPRESSION] _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% formating((value) => {
     return {
         handle_types: value[2],
         argument: value[4],
         contents: value[6]
     }
-} %}
+}) %}
 
-FOR -> LABEL:? "for" _ "(" _ DECLARATION_IDENTIFIER _ ":" _ EXPRESSION _ ")" _ UNSCOPED_STATEMENT {% () => {
+FOR -> LABEL:? "for" _ "(" _ DECLARATION_IDENTIFIER _ ":" _ EXPRESSION _ ")" _ UNSCOPED_STATEMENT {% formating(() => {
     return {
         type: 'for',
         label: value[0],
@@ -274,34 +274,34 @@ FOR -> LABEL:? "for" _ "(" _ DECLARATION_IDENTIFIER _ ":" _ EXPRESSION _ ")" _ U
         target: value[9],
         contents: value[13]
     }
-} %}
-DECLARATION -> DECLARATION_TYPE _ MANYP[DECLARATION_IDENTIFIER (_ "=" _ EXPRESSION):?] {% (value) => {
+}) %}
+DECLARATION -> DECLARATION_TYPE _ MANYP[DECLARATION_IDENTIFIER (_ "=" _ EXPRESSION):?] {% formating((value) => {
     return {
         type: 'declaration',
         data_type: value[0],
         names: value[2],
         value: value[3]?.[3],
     }
-} %}
-INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSION {% (value) => {
+}) %}
+INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSION {% formating((value) => {
     return {
         type: 'inline_sequence',
         data_type: value[0],
         name: value[2],
         value: value[6],
     }
-} %}
-ASSIGNMENT -> %identifier _ %assignment _ EXPRESSION {% (value) => {
+}) %}
+ASSIGNMENT -> %identifier _ %assignment _ EXPRESSION {% formating((value) => {
     return {
         type: 'assignment',
         assignment_type: value[2],
         name: value[0],
         value: value[4],
     }
-} %}
-DECLARATION_TYPE -> ("let" | EXPRESSION "?":? (("[" "]") "?":?):*) {% did %}
+}) %}
+DECLARATION_TYPE -> ("let" | EXPRESSION "?":? (("[" "]") "?":?):*) {% formating(did) %}
 
-LABEL -> (%identifier _ ":" _) {% did %}
+LABEL -> (%identifier _ ":" _) {% formating(did) %}
 
 @{%
     const CHAIN_LEFT = Symbol('CHAIN_LEFT')
@@ -346,69 +346,69 @@ LABEL -> (%identifier _ ":" _) {% did %}
         }
     }
 %}
-CHAIN[LEFT] -> $LEFT {% chain(id, tag(CHAIN_LEFT)) %} | $NEXT {% chain(did, tag(CHAIN_RIGHT)) %}
-CHAIN_WRAP[SELF, NEXT] -> CHAIN[$SELF] {% chain(id, unwrap_operation(id))%}
-INFIX_OPERATOR[  SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN _ $NEXT] {% chain(id, unwrap_operation(operation)) %}
-PREFIX_OPERATOR[ SELF, TOKEN, NEXT] -> CHAIN[$TOKEN _ $SELF         ] {% chain(id, unwrap_operation(prefix)) %}
-POSTFIX_OPERATOR[SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN        ] {% chain(id, unwrap_operation(postfix)) %}
+CHAIN[LEFT] -> $LEFT {% formating(chain(id, tag(CHAIN_LEFT))) %} | $NEXT {% formating(chain(did, tag(CHAIN_RIGHT))) %}
+CHAIN_WRAP[SELF, NEXT] -> CHAIN[$SELF] {% formating(chain(id, unwrap_operation(id))) %}
+INFIX_OPERATOR[  SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN _ $NEXT] {% formating(chain(id, unwrap_operation(operation))) %}
+PREFIX_OPERATOR[ SELF, TOKEN, NEXT] -> CHAIN[$TOKEN _ $SELF         ] {% formating(chain(id, unwrap_operation(prefix))) %}
+POSTFIX_OPERATOR[SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN        ] {% formating(chain(id, unwrap_operation(postfix))) %}
 
-EXPRESSION  -> CHAIN_WRAP[  MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION, SEQUENCE  ] {% id %}
-SEQUENCE    -> INFIX_OPERATOR[  SEQUENCE,    ">>="                                  {% id %}, WITH        ] {% id %}
-WITH        -> PREFIX_OPERATOR[ WITH,        "with"                                 {% id %}, CONDITIONAL ] {% id %}
+EXPRESSION  -> CHAIN_WRAP[  MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION, SEQUENCE  ] {% formating(id) %}
+SEQUENCE    -> INFIX_OPERATOR[  SEQUENCE, ">>="     {% formating(id) %}, WITH        ] {% formating(id) %}
+WITH        -> PREFIX_OPERATOR[ WITH,     "with"    {% formating(id) %}, CONDITIONAL ] {% formating(id) %}
 
-CONDITIONAL -> CHAIN_WRAP[COALESCE _ "?" _ EXPRESSION _ ":" _ EXPRESSION {% (value) => {
+CONDITIONAL -> CHAIN_WRAP[COALESCE _ "?" _ EXPRESSION _ ":" _ EXPRESSION {% formating((value) => {
     return {
         type: 'ternary',
         condition: value[0],
         left: value[4],
         right: value[6],
     }
-} %}, COALESCE]
+}) %}, COALESCE]
 
-COALESCE    -> INFIX_OPERATOR[  COALESCE,    "??"                                   {% id %}, OR          ] {% id %}
-OR          -> INFIX_OPERATOR[  OR,          "||"                                   {% id %}, AND         ] {% id %}
-AND         -> INFIX_OPERATOR[  AND,         "&&"                                   {% id %}, BIT_OR      ] {% id %}
-BIT_OR      -> INFIX_OPERATOR[  BIT_OR,      "|"                                    {% id %}, BIT_XOR     ] {% id %}
-BIT_XOR     -> INFIX_OPERATOR[  BIT_XOR,     "^"                                    {% id %}, BIT_AND     ] {% id %}
-BIT_AND     -> INFIX_OPERATOR[  BIT_AND,     "&"                                    {% id %}, EQUALITY    ] {% id %}
-EQUALITY    -> INFIX_OPERATOR[  EQUALITY,    ("==" | "!=")                          {% id %}, COMPARISON  ] {% id %}
-COMPARISON  -> INFIX_OPERATOR[  COMPARISON,  (">=" | "<=" | "<" | ">")              {% id %}, SHIFT       ] {% id %}
-SHIFT       -> INFIX_OPERATOR[  SHIFT,       ("<<<" | ">>>" | "<<" | ">>")          {% id %}, SUM         ] {% id %}
-SUM         -> INFIX_OPERATOR[  SUM,         ("+" | "-")                            {% id %}, PRODUCT     ] {% id %}
-PRODUCT     -> INFIX_OPERATOR[  PRODUCT,     ("*" | "/" | "%")                      {% id %}, POWER       ] {% id %}
-POWER       -> INFIX_OPERATOR[  POWER,       "**"                                   {% id %}, PREFIX      ] {% id %}
-PREFIX      -> PREFIX_OPERATOR[ PREFIX,      ("!" | "~" | "-" | "++" | "--")        {% id %}, POSTFIX     ] {% id %}
-POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--")        {% id %}, CALL        ] {% id %}
+COALESCE    -> INFIX_OPERATOR[  COALESCE,    "??"                                   {% formating(id) %}, OR          ] {% formating(id) %}
+OR          -> INFIX_OPERATOR[  OR,          "||"                                   {% formating(id) %}, AND         ] {% formating(id) %}
+AND         -> INFIX_OPERATOR[  AND,         "&&"                                   {% formating(id) %}, BIT_OR      ] {% formating(id) %}
+BIT_OR      -> INFIX_OPERATOR[  BIT_OR,      "|"                                    {% formating(id) %}, BIT_XOR     ] {% formating(id) %}
+BIT_XOR     -> INFIX_OPERATOR[  BIT_XOR,     "^"                                    {% formating(id) %}, BIT_AND     ] {% formating(id) %}
+BIT_AND     -> INFIX_OPERATOR[  BIT_AND,     "&"                                    {% formating(id) %}, EQUALITY    ] {% formating(id) %}
+EQUALITY    -> INFIX_OPERATOR[  EQUALITY,    ("==" | "!=")                          {% formating(id) %}, COMPARISON  ] {% formating(id) %}
+COMPARISON  -> INFIX_OPERATOR[  COMPARISON,  (">=" | "<=" | "<" | ">")              {% formating(id) %}, SHIFT       ] {% formating(id) %}
+SHIFT       -> INFIX_OPERATOR[  SHIFT,       ("<<<" | ">>>" | "<<" | ">>")          {% formating(id) %}, SUM         ] {% formating(id) %}
+SUM         -> INFIX_OPERATOR[  SUM,         ("+" | "-")                            {% formating(id) %}, PRODUCT     ] {% formating(id) %}
+PRODUCT     -> INFIX_OPERATOR[  PRODUCT,     ("*" | "/" | "%")                      {% formating(id) %}, POWER       ] {% formating(id) %}
+POWER       -> INFIX_OPERATOR[  POWER,       "**"                                   {% formating(id) %}, PREFIX      ] {% formating(id) %}
+PREFIX      -> PREFIX_OPERATOR[ PREFIX,      ("!" | "~" | "-" | "++" | "--")        {% formating(id) %}, POSTFIX     ] {% formating(id) %}
+POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--")        {% formating(id) %}, CALL        ] {% formating(id) %}
 
-KEY_WORD_PARAMETER -> %identifier _ "=" _ EXPRESSION {% (value) => ({name: value[0], value: value[4]})%}
+KEY_WORD_PARAMETER -> %identifier _ "=" _ EXPRESSION {% formating((value) => ({name: value[0], value: value[4]})) %}
 CALL -> CHAIN_WRAP[CALL ("(" | "?(") (
-    _ MANYP[SEQUENCE] {% (value) => ({ params: value[1][0] }) %}
-    | _ MANYP[KEY_WORD_PARAMETER] {% (value) => ({ namedParams: value[1].map(did) }) %}
-    | _ MANY[SEQUENCE] _ "," _ MANYP[KEY_WORD_PARAMETER] {% (value) => ({ params: value[1][0], namedParams: value[5].map(did) }) %}
-):? _ ")" {% (value) => {
+    _ MANYP[SEQUENCE] {% formating((value) => ({ params: value[1][0] })) %}
+    | _ MANYP[KEY_WORD_PARAMETER] {% formating((value) => ({ namedParams: value[1].map(did) })) %}
+    | _ MANY[SEQUENCE] _ "," _ MANYP[KEY_WORD_PARAMETER] {% formating((value) => ({ params: value[1][0], namedParams: value[5].map(did) })) %}
+):? _ ")" {% formating((value) => {
     return {
         type: 'call',
         target: value[0],
         nullish: value[1][0].value === '?(',
         ...value[2],
     }
-} %}, MEMBER] {% id %}
-MEMBER -> CHAIN_WRAP[MEMBER ("." | "?.") _ %identifier {% (value) => {
+}) %}, MEMBER] {% formating(id) %}
+MEMBER -> CHAIN_WRAP[MEMBER ("." | "?.") _ %identifier {% formating((value) => {
     return {
         type: 'member',
         target: value[0],
         nullish: value[1][0].value === '?.',
         member: value[3]
     }
-} %}, INDEX] {% id%}
-INDEX -> CHAIN_WRAP[INDEX ("[" | "?[") _ EXPRESSION _ "]" {% (value) => {
+}) %}, INDEX] {% formating(id) %}
+INDEX -> CHAIN_WRAP[INDEX ("[" | "?[") _ EXPRESSION _ "]" {% formating((value) => {
     return {
         type: 'index',
         target: value[0],
         nullish: value[1][0].value === '?[',
         value: value[3]
     }
-} %}, REFERENCE] {% id%}
+}) %}, REFERENCE] {% formating(id) %}
 REFERENCE -> CHAIN_WRAP[TYPE_REFERENCE "::" %identifier, TYPE_REFERENCE]
 TYPE_REFERENCE -> CHAIN_WRAP["::" VALUE, VALUE]
 
@@ -422,9 +422,9 @@ VALUE -> (
     | STRUCT
     | FUNCTION_SIGNATURE
     | GROUPING
-) {% did %}
+) {% formating(did) %}
 
-GROUPING -> "(" _ EXPRESSION _ ")" {% (value) => value[2] %}
+GROUPING -> "(" _ EXPRESSION _ ")" {% formating((value) => value[2]) %}
 
 @{%
     const METHOD = Symbol('METHOD')
@@ -433,16 +433,22 @@ GROUPING -> "(" _ EXPRESSION _ ")" {% (value) => value[2] %}
 %}
 STRUCT -> "{"
     (
-        (_ STRUCT_ARGUMENTS):+ {% (value) => ({ arguments: value[0].map((value) => value[1])}) %}
+        (_ STRUCT_ARGUMENTS):+ {% formating((value) => ({ arguments: value[0].map((value) => value[1])})) %}
         |
-        (_ STRUCT_OPTINAL):+ {% (value) => ({ optionals: value[0].map((value) => value[1])}) %}
+        (_ STRUCT_OPTINAL):+ {% formating((value) => ({ optionals: value[0].map((value) => value[1])})) %}
         |
         (_ STRUCT_ARGUMENTS):+
-        (_ STRUCT_OPTINAL):+ {% (value) => ({ arguments: value[0].map((value) => value[1]), optionals: value[1].map((value) => value[1])}) %}
+        (_ STRUCT_OPTINAL):+ {% formating((value) => ({ arguments: value[0].map((value) => value[1]), optionals: value[1].map((value) => value[1])})) %}
     ):?
-    (_ (STRUCT_PROPERTY {% (value) => [PROPERTY, value] %} | STRUCT_METHOD {% (value) => [METHOD, value] %} | STRUCT_OVERLOAD {% (value) => [OVERLOAD, value] %})):*
+    (_
+        (
+            STRUCT_PROPERTY {% formating((value) => [PROPERTY, value]) %}
+            | STRUCT_METHOD {% formating((value) => [METHOD, value]) %}
+            | STRUCT_OVERLOAD {% formating((value) => [OVERLOAD, value]) %}
+        )
+    ):*
     _
-"}" {% chain(formating((value) => {
+"}" {% formating((value) => {
     const name = value[2].map((value) => value[1])
     const properties = name.filter((value) => value[0] === PROPERTY).map((value) => value[1])
     const methods = name.filter((value) => value[0] === METHOD).map((value) => value[1])
@@ -454,7 +460,7 @@ STRUCT -> "{"
         methods,
         overloads,
     }
-})) %}
+}) %}
 
 STRUCT_ARGUMENTS -> DECLARATION_TYPE _ MANY[%identifier] {% formating((value) => {
     return {
@@ -464,7 +470,7 @@ STRUCT_ARGUMENTS -> DECLARATION_TYPE _ MANY[%identifier] {% formating((value) =>
 }) %}
 STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ WITH] {% formating((value) => {
     return {
-        type: id(value),
+        type: value[0],
         identifiers: value[2].map((value) => {
             return {
                 identifier: value[0],
@@ -489,40 +495,40 @@ STRUCT_METHOD -> %identifier _ MULTI_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% f
 }) %}
 
 STRUCT_OVERLOAD -> (
-    UNARY_OPERATOR _ UNSCOPED_STATEMENT {% (value) => {
+    UNARY_OPERATOR _ UNSCOPED_STATEMENT {% formating((value) => {
         return {
             type: 'unary',
             operator: value[0],
             statement: value[3]
         }
-    } %}
-    | INFIX_OPERATOR _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% (value) => {
+    }) %}
+    | INFIX_OPERATOR _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% formating((value) => {
         return {
             type: 'infix_left',
             operator: value[0],
             parameter: value[2],
             statement: value[4]
         }
-    } %}
-    | SINGLE_FUNCTION_ARGUMENT _ INFIX_OPERATOR _ UNSCOPED_STATEMENT {% (value) => {
+    }) %}
+    | SINGLE_FUNCTION_ARGUMENT _ INFIX_OPERATOR _ UNSCOPED_STATEMENT {% formating((value) => {
         return {
             type: 'infix_right',
             operator: value[2],
             parameter: value[0],
             statement: value[4]
         }
-    } %}
-) {% id %}
-INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") {% id %}
-UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") {% id %}
+    }) %}
+) {% formating(id) %}
+INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") {% formating(id) %}
+UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") {% formating(id) %}
 
 STATMENT_FUNCTION -> MULTI_FUNCTION_ARGUMENT _ "=>" _ PURE_UNSCOPED_STATEMENT
 
-MULTI_FUNCTION_ARGUMENT -> "(" _ (MANYP[FUNCTION_ARGUMENT] _):? ")" {% (value) => value[2]?.[0] %}
-SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% (value) => value[2]?.[0] %}
+MULTI_FUNCTION_ARGUMENT -> "(" _ (MANYP[FUNCTION_ARGUMENT] _):? ")" {% formating((value) => value[2]?.[0]) %}
+SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% formating((value) => value[2]?.[0]) %}
 FUNCTION_ARGUMENT -> (EXPRESSION _):? DECLARATION_IDENTIFIER {% formating((value) => {
     return {
-        type: value[0][0],
+        type: value[0]?.[0],
         name: value[1]
     }
 }) %}
@@ -532,7 +538,12 @@ DECLARATION_IDENTIFIER -> %identifier
 # the right side here is explicet effects
 FUNCTION_SIGNATURE -> "(" (_ MANYP[EXPRESSION]) _ ")" _ "->" _ EXPRESSION (_ ":" _ MANY[EXPRESSION]):?
 
-ARRAY -> "[" (_ MANYP[EXPRESSION]):? _ "]"
+ARRAY -> "[" (_ MANYP[EXPRESSION]):? _ "]" {% formating((value) => {
+    return {
+        type: 'array',
+        values: value[1]?.[1],
+    }
+}) %}
 
 # TODO: real regex parsing
 REGEX -> %regex %regex_content %regex_end
@@ -548,14 +559,14 @@ LITERAL -> (
     | %exponential
     | %color
 	| %string 
-) {% (value) => {
+) {% formating((value) => {
     return {
         type: 'literal',
         value: did(value),
     }
-} %}
+}) %}
 
 BREAK -> %newline:+ | %file_end
 
 # optional whitespace 
-_ -> (%newline | %whitespace | %comment):* {% () => null %}
+_ -> (%newline | %whitespace | %comment):* {% formating(() => null) %}
