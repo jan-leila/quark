@@ -36,9 +36,6 @@ let double_vector = generic_vector(::double)
 
 double_vector[] name = [double_vector(0,0,0)]
 
-
-
-
 let position = {
 	float x, y, z
 
@@ -88,4 +85,5 @@ let zombie_ticker = generic_tick(zombie)(zombie_entity::velocity, zombie_entity:
 let player_instance = player()
 let zombies = [zombie(), zombie(), zombie(), zombie(), zombie()]
 player = player_ticker(player_instance)
-zombies = zombies.map((zombie_instance) => zombie_ticker(zombie_instance))
+
+zombies = zombies.map(zombie_ticker(zombie_instance))

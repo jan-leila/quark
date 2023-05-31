@@ -162,6 +162,7 @@ PURE_UNSCOPED_STATEMENT -> (
     | DO_WHILE
     | FOR
     | DO
+    | ASSIGNMENT
 )
 
 BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")" {% formating((value) => {
@@ -290,6 +291,14 @@ INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSIO
         value: value[6],
     }
 } %}
+ASSIGNMENT -> %identifier _ %assignment _ EXPRESSION {% (value) => {
+    return {
+        type: 'assignment',
+        assignment_type: value[2],
+        name: value[0],
+        value: value[4],
+    }
+} %}
 DECLARATION_TYPE -> ("let" | EXPRESSION "?":? (("[" "]") "?":?):*) {% did %}
 
 LABEL -> (%identifier _ ":" _) {% did %}
@@ -343,7 +352,7 @@ INFIX_OPERATOR[  SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN _ $NEXT] {% chain(i
 PREFIX_OPERATOR[ SELF, TOKEN, NEXT] -> CHAIN[$TOKEN _ $SELF         ] {% chain(id, unwrap_operation(prefix)) %}
 POSTFIX_OPERATOR[SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN        ] {% chain(id, unwrap_operation(postfix)) %}
 
-EXPRESSION  -> INFIX_OPERATOR[  %identifier, %assignment                            {% id %}, SEQUENCE    ] {% id %}
+EXPRESSION  -> CHAIN_WRAP[  MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION, SEQUENCE  ] {% id %}
 SEQUENCE    -> INFIX_OPERATOR[  SEQUENCE,    ">>="                                  {% id %}, WITH        ] {% id %}
 WITH        -> PREFIX_OPERATOR[ WITH,        "with"                                 {% id %}, CONDITIONAL ] {% id %}
 
@@ -408,7 +417,7 @@ VALUE -> (
     | LITERAL
     | TEMPLATE_STRING
     | REGEX
-    | FUNCTION
+    | STATMENT_FUNCTION
     | ARRAY
     | STRUCT
     | FUNCTION_SIGNATURE
@@ -507,7 +516,7 @@ STRUCT_OVERLOAD -> (
 INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") {% id %}
 UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") {% id %}
 
-FUNCTION -> MULTI_FUNCTION_ARGUMENT _ "=>" _ UNSCOPED_STATEMENT
+STATMENT_FUNCTION -> MULTI_FUNCTION_ARGUMENT _ "=>" _ PURE_UNSCOPED_STATEMENT
 
 MULTI_FUNCTION_ARGUMENT -> "(" _ (MANYP[FUNCTION_ARGUMENT] _):? ")" {% (value) => value[2]?.[0] %}
 SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% (value) => value[2]?.[0] %}
