@@ -5,7 +5,7 @@ const parser = require('../src/engine/parser.js');
 const file = fs.readFileSync('examples/example-project/index.qk', "utf-8");
 parser.feed(file);
 
-console.log("-------------------------------");
+// console.log("-------------------------------");
 // console.log(util.inspect(parser.results, { showHidden: false, depth: null, colors: true }));
 
 const differences_recursion = (object_1, object_2, path) => {
@@ -44,5 +44,5 @@ const differences = (object_1, object_2) => {
 // }
 
 console.log(util.inspect(parser.results[0], { showHidden: false, depth: null, colors: true }));
-parser.results[1] && console.log(util.inspect(parser.results[1], { showHidden: false, depth: null, colors: true }));
+// parser.results[1] && console.log(util.inspect(parser.results[1], { showHidden: false, depth: null, colors: true }));
 console.log(parser.results.length);

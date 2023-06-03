@@ -1,48 +1,7 @@
 @{%
-	const lexer = require('../src/engine/lexer.js');
     const util = require('util');
-    const log = (value) => {
-        console.log(util.inspect(value, { showHidden: false, depth: null, colors: true }));
-        return value
-    }
-    const location = (value) => {
-        let {
-            offset,
-            lineBreaks,
-            line,
-            col,
-        } = value[0]
-        return {
-            offset,
-            lineBreaks,
-            line,
-            col,
-        }
-    }
-    const did = value => value[0][0];
-    const normalize = (value) => {
-        value.filter(value => value).map(value => value[0][0])
-    }
-    const strip = (type, characters) => {
-        return (value) => {
-            return {
-                type,
-                value: value[0].value.substring(characters, value[0].value.length - 1),
-                ...location(value)
-            }
-        }
-    }
-    const statement = (name) => {
-        return (value) => {
-            return {
-                type: name,
-                ...value[0]
-            }
-        }
-    }
-    const tag = (name, lambda) => (it) => [name, lambda?.(it) ?? it]
-
-    const chain = (...args) => (init) =>  args.reduce((data, lambda) => lambda(data), init)
+	const lexer = require('../src/engine/lexer.js');
+    const { LITERAL, WHITESPACE, BREAK } = require('../src/engine/nodes.js')
 
     const debug = false
     const formating = (lambda) => {
@@ -51,6 +10,18 @@
         }
         return lambda
     }
+
+    const log = (value) => console.log(util.inspect(value, { showHidden: false, depth: null, colors: true }));
+    
+    const did = value => value[0][0];
+    const tag = (name, lambda) => (it) => [name, lambda?.(it) ?? it]
+
+    const format = debug ? () => (value) => value : (lambda) => lambda
+    const drill = (...offsets) => (tree) => offsets.reduce((subtree, offset) => subtree[offset], tree)
+    const chain = (...lambdas) => (tree) => lambdas.reduce((data, lambda) => lambda(data), tree)
+    const build = (...lambdas) => (tree) => lambdas.reduce((data, lambda) => ({ ...data, ...(lambda?.(tree) ?? {}) }), {})
+
+    const withType = (type) => (tree) => ({ type })
 %}
 
 @lexer lexer
@@ -559,14 +530,9 @@ LITERAL -> (
     | %exponential
     | %color
 	| %string 
-) {% formating((value) => {
-    return {
-        type: 'literal',
-        value: did(value),
-    }
-}) %}
+) {% format(build(withType(LITERAL), (value) => ({ value: drill(0, 0)(value) }))) %}
 
-BREAK -> %newline:+ | %file_end
+BREAK -> %newline:+ | %file_end {% format(() => BREAK) %}
 
 # optional whitespace 
-_ -> (%newline | %whitespace | %comment):* {% formating(() => null) %}
+_ -> (%newline | %whitespace | %comment):* {% format(() => WHITESPACE) %}
