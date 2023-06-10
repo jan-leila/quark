@@ -1,7 +1,21 @@
 @{%
     const util = require('util');
 	const lexer = require('../src/engine/lexer.js');
-    const { LITERAL, WHITESPACE, BREAK } = require('../src/engine/nodes.js')
+    const {
+        LITERAL,
+        WHITESPACE,
+        BREAK,
+        TEMPLATE_STRING,
+        TEMPLATE_STRING_LITERAL,
+        TEMPLATE_STRING_INTERPRETATION,
+        ARRAY,
+        FUNCTION_SIGNATURE,
+        STATEMENT_FUNCTION,
+        UNARY_OVERLOAD,
+        LEFT_INFIX_OVERLOAD,
+        RIGHT_INFIX_OVERLOAD,
+        STRUCT,
+    } = require('../src/engine/nodes.js')
 
     const debug = false
     const formating = (lambda) => {
@@ -16,12 +30,25 @@
     const did = value => value[0][0];
     const tag = (name, lambda) => (it) => [name, lambda?.(it) ?? it]
 
-    const format = debug ? () => (value) => value : (lambda) => lambda
-    const drill = (...offsets) => (tree) => offsets.reduce((subtree, offset) => subtree[offset], tree)
-    const chain = (...lambdas) => (tree) => lambdas.reduce((data, lambda) => lambda(data), tree)
-    const build = (...lambdas) => (tree) => lambdas.reduce((data, lambda) => ({ ...data, ...(lambda?.(tree) ?? {}) }), {})
+    const format = debug ? ()  => (tree) => tree : (lambda)                  => lambda
+    const drill = (...offsets) => (tree) => offsets.reduce((subtree, offset) => subtree?.[offset], tree)
+    const chain = (...lambdas) => (tree) => lambdas.reduce((data, lambda)    => lambda(data), tree)
+    const build = (...lambdas) => (tree) => lambdas.reduce((data, lambda)    => ({ ...data, ...(lambda?.(tree) ?? {}) }), {})
+    const each =  (lambda)     => (tree) => tree.map((subTree)               => lambda(subTree))
 
+    const withLog = (lambda) => (tree) => {
+        const value = lambda(tree)
+        log(value)
+        return value
+    }
     const withType = (type) => (tree) => ({ type })
+    const withName = (name) => (lambda) => (tree) => ({ [name]: lambda(tree) })
+    /*
+    const withDrill = (name, ...offsets) => {
+        const activeDrill = drill(...offsets)
+        return (tree) => ({[name]: activeDrill(tree)})
+    }
+    */
 %}
 
 @lexer lexer
@@ -38,7 +65,7 @@ MANYP[T] -> MANY[$T] (_ ","):? {% formating((value) => {
     return value[0]
 }) %}
 
-ROOT -> (_ IMPORT {% formating((value) => value[1]) %}):* (_ TOP_STATEMENT {% formating(([_, statement]) => statement) %}):* {% formating(([ imports, statements]) => {
+ROOT -> _ %file_end | (_ IMPORT {% formating((value) => value[1]) %}):* (_ TOP_STATEMENT {% formating(([_, statement]) => statement) %}):* {% formating(([ imports, statements]) => {
     return {
         imports,
         statements,
@@ -123,7 +150,7 @@ PURE_STATEMENT -> (
 PURE_UNSCOPED_STATEMENT -> (
     BLOCK
     | INLINE_SEQUENCE
-    | BREAK_STATMENT
+    | BREAK_STATEMENT
     | CONTINUE
     | RETURN
     | USE
@@ -143,7 +170,7 @@ BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")" {
     }
 }) %}
 
-BREAK_STATMENT -> "break" (_ %identifier):? {% formating((value) => {
+BREAK_STATEMENT -> "break" (_ %identifier):? {% formating((value) => {
     return {
         type: 'break',
         label: value[1]?.[1]
@@ -383,19 +410,18 @@ INDEX -> CHAIN_WRAP[INDEX ("[" | "?[") _ EXPRESSION _ "]" {% formating((value) =
 REFERENCE -> CHAIN_WRAP[TYPE_REFERENCE "::" %identifier, TYPE_REFERENCE]
 TYPE_REFERENCE -> CHAIN_WRAP["::" VALUE, VALUE]
 
-VALUE -> (
+VALUE -> 
     %identifier
     | LITERAL
     | TEMPLATE_STRING
     | REGEX
-    | STATMENT_FUNCTION
+    | STATEMENT_FUNCTION
     | ARRAY
     | STRUCT
     | FUNCTION_SIGNATURE
     | GROUPING
-) {% formating(did) %}
 
-GROUPING -> "(" _ EXPRESSION _ ")" {% formating((value) => value[2]) %}
+GROUPING -> "(" _ EXPRESSION _ ")" {% format(drill(2)) %}
 
 @{%
     const METHOD = Symbol('METHOD')
@@ -403,123 +429,176 @@ GROUPING -> "(" _ EXPRESSION _ ")" {% formating((value) => value[2]) %}
     const PROPERTY = Symbol('OVERLOAD')
 %}
 STRUCT -> "{"
-    (
-        (_ STRUCT_ARGUMENTS):+ {% formating((value) => ({ arguments: value[0].map((value) => value[1])})) %}
-        |
-        (_ STRUCT_OPTINAL):+ {% formating((value) => ({ optionals: value[0].map((value) => value[1])})) %}
-        |
-        (_ STRUCT_ARGUMENTS):+
-        (_ STRUCT_OPTINAL):+ {% formating((value) => ({ arguments: value[0].map((value) => value[1]), optionals: value[1].map((value) => value[1])})) %}
-    ):?
-    (_
-        (
-            STRUCT_PROPERTY {% formating((value) => [PROPERTY, value]) %}
-            | STRUCT_METHOD {% formating((value) => [METHOD, value]) %}
-            | STRUCT_OVERLOAD {% formating((value) => [OVERLOAD, value]) %}
-        )
-    ):*
     _
-"}" {% formating((value) => {
-    const name = value[2].map((value) => value[1])
-    const properties = name.filter((value) => value[0] === PROPERTY).map((value) => value[1])
-    const methods = name.filter((value) => value[0] === METHOD).map((value) => value[1])
-    const overloads = name.filter((value) => value[0] === OVERLOAD).map((value) => value[1])
-    return {
-        type: "struct",
-        ...value[1],
-        properties,
-        methods,
-        overloads,
-    }
-}) %}
+    (
+        (STRUCT_ARGUMENTS _):+ {% format(
+            build(
+                (tree) => ({
+                    arguments: each(drill(0, 0))(tree),
+                    optionals: [],
+                }),
+            ),
+        ) %}
+        | (STRUCT_OPTIONALS _):+ {% format(
+            build(
+                (tree) => ({
+                    arguments: [],
+                    optionals: each(drill(0, 0))(tree),
+                }),
+            ),
+        ) %}
+        | (STRUCT_ARGUMENTS _):+ (STRUCT_OPTIONALS _):+ {% format(
+            build(
+                (tree) => ({
+                    arguments: each(drill(0, 0))(tree),
+                    optionals: each(drill(1, 0))(tree),
+                }),
+            ),
+        ) %}
+    ):?
+    (
+        (
+            (STRUCT_PROPERTY _) {% format(
+                (tree) => [
+                    PROPERTY, drill(0)(tree),
+                ]
+            ) %}
+            | (STRUCT_METHOD _)  {% format(
+                (tree) => [
+                    METHOD, drill(0)(tree),
+                ]
+            ) %}
+            | (STRUCT_OVERLOAD _)  {% format(
+                (tree) => [
+                    OVERLOAD, drill(0)(tree),
+                ]
+            ) %}
+        ):* {% format(
+            chain(drill(0), (tree) => {
+                const properties = tree.filter((value) => value[0] === PROPERTY).map((value) => value[1])
+                const methods = tree.filter((value) => value[0] === METHOD).map((value) => value[1])
+                const overloads = tree.filter((value) => value[0] === OVERLOAD).map((value) => value[1])
+                return {
+                    properties,
+                    methods,
+                    overloads,
+                }
+            })
+        ) %}
+    )
+"}" {% format(
+    build(
+        withType(STRUCT),
+        drill(2),
+        drill(3),
+    ),
+) %}
 
-STRUCT_ARGUMENTS -> DECLARATION_TYPE _ MANY[%identifier] {% formating((value) => {
-    return {
-        type: value[0],
-        identifiers: value[2].map(id),
-    }
-}) %}
-STRUCT_OPTINAL -> DECLARATION_TYPE _ MANY[%identifier _ "=" _ WITH] {% formating((value) => {
-    return {
-        type: value[0],
-        identifiers: value[2].map((value) => {
-            return {
-                identifier: value[0],
-                default_value: value[4],
-            }
-        }),
-    }
-}) %}
+STRUCT_ARGUMENTS -> DECLARATION_TYPE _ MANY[%identifier] {% format(
+    build(
+        withName('argumentsType')(drill(0)),
+        withName('names')(drill(2))
+    )
+) %}
+STRUCT_OPTIONALS -> DECLARATION_TYPE _ MANY[STRUCT_OPTIONAL_NAME] {% format(
+    build(
+        withName('optinalsType')(drill(0)),
+        withName('values')(drill(2))
+    )
+) %}
+STRUCT_OPTIONAL_NAME -> %identifier _ "=" _ WITH {% format(
+    build(
+        withName('name')(drill(0)),
+        withName('default_value')(drill(4))
+    )
+) %}
 
-STRUCT_PROPERTY -> %identifier _ "=" _ WITH BREAK {% formating((value) => {
-    return {
-        identifier: value[0],
-        value: value[4],
-    }
-}) %}
+STRUCT_PROPERTY -> %identifier _ "=" _ WITH BREAK {% format(
+    build(
+        withName('name')(drill(0)),
+        withName('value')(drill(4)),
+    )
+) %}
 
-STRUCT_METHOD -> %identifier _ MULTI_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% formating((value) => {
-    return {
-        identifier: value[0],
-        value: value[2],
-    }
-}) %}
+STRUCT_METHOD -> %identifier _ MULTI_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% format(
+    build(
+        withName('name')(drill(0)),
+        withName('arguments')(drill(2)),
+        withName('body')(drill(4)),
+    )
+) %}
 
-STRUCT_OVERLOAD -> (
-    UNARY_OPERATOR _ UNSCOPED_STATEMENT {% formating((value) => {
-        return {
-            type: 'unary',
-            operator: value[0],
-            statement: value[3]
-        }
-    }) %}
-    | INFIX_OPERATOR _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% formating((value) => {
-        return {
-            type: 'infix_left',
-            operator: value[0],
-            parameter: value[2],
-            statement: value[4]
-        }
-    }) %}
-    | SINGLE_FUNCTION_ARGUMENT _ INFIX_OPERATOR _ UNSCOPED_STATEMENT {% formating((value) => {
-        return {
-            type: 'infix_right',
-            operator: value[2],
-            parameter: value[0],
-            statement: value[4]
-        }
-    }) %}
-) {% formating(id) %}
-INFIX_OPERATOR -> ("||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**") {% formating(id) %}
-UNARY_OPERATOR -> ("!" | "~" | "-" | "++" | "--") {% formating(id) %}
+STRUCT_OVERLOAD -> UNARY_OVERLOAD | RIGHT_INFIX_OVERLOAD | LEFT_INFIX_OVERLOAD
 
-STATMENT_FUNCTION -> MULTI_FUNCTION_ARGUMENT _ "=>" _ PURE_UNSCOPED_STATEMENT
+UNARY_OVERLOAD -> UNARY_OPERATOR _ UNSCOPED_STATEMENT {% format(
+    withType(UNARY_OVERLOAD),
+    withName('operator')(drill(0)),
+    withName('statement')(drill(3)),
+) %}
+UNARY_OPERATOR -> "!" | "~" | "-" | "++" | "--"
 
-MULTI_FUNCTION_ARGUMENT -> "(" _ (MANYP[FUNCTION_ARGUMENT] _):? ")" {% formating((value) => value[2]?.[0]) %}
-SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% formating((value) => value[2]?.[0]) %}
-FUNCTION_ARGUMENT -> (EXPRESSION _):? DECLARATION_IDENTIFIER {% formating((value) => {
-    return {
-        type: value[0]?.[0],
-        name: value[1]
-    }
-}) %}
+LEFT_INFIX_OVERLOAD -> INFIX_OPERATOR _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% format(
+    withType(LEFT_INFIX_OVERLOAD),
+    withName('operator')(drill(0)),
+    withName('parameter')(drill(2)),
+    withName('statement')(drill(4)),
+) %}
+
+RIGHT_INFIX_OVERLOAD -> SINGLE_FUNCTION_ARGUMENT _ INFIX_OPERATOR _ UNSCOPED_STATEMENT {% format(
+    withType(RIGHT_INFIX_OVERLOAD),
+    withName('operator')(drill(2)),
+    withName('parameter')(drill(0)),
+    withName('statement')(drill(4)),
+) %}
+INFIX_OPERATOR -> "||" | "&&" | "|" | "^" | "&" | "<" | ">" | "<<<" | ">>>" | "<<" | ">>" | "+" | "-" | "*" | "/" | "%" | "**"
+
+STATEMENT_FUNCTION -> MULTI_FUNCTION_ARGUMENT _ "=>" _ PURE_UNSCOPED_STATEMENT {% format(
+    build(
+        withType(STATEMENT_FUNCTION),
+        withName('arguments')(drill(0)),
+        withName('body')(drill(4)),
+    )
+) %}
+
+MULTI_FUNCTION_ARGUMENT -> "(" _ (MANYP[FUNCTION_ARGUMENT] _):? ")" {% format(drill(2, 0)) %}
+SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% format(
+    drill(2, 0)
+) %}
+FUNCTION_ARGUMENT -> (EXPRESSION _):? DECLARATION_IDENTIFIER {% format(
+    build(
+        withName('argumentType')(drill(0, 0)),
+        withName('argumentName')(drill(1)),
+    )
+) %}
 # TODO: destructuring objects and arrays
 DECLARATION_IDENTIFIER -> %identifier
 
 # the right side here is explicet effects
-FUNCTION_SIGNATURE -> "(" (_ MANYP[EXPRESSION]) _ ")" _ "->" _ EXPRESSION (_ ":" _ MANY[EXPRESSION]):?
+FUNCTION_SIGNATURE -> "(" (_ MANYP[EXPRESSION]):? _ ")" _ "->" _ EXPRESSION (_ ":" _ MANY[EXPRESSION]):? {% format(
+    build(
+        withType(FUNCTION_SIGNATURE),
+        withName('paramTypes')(drill(1, 1)),
+        withName('returnType')(drill(7)),
+        withName('explicitUseTypes')(drill(8, 3)),
+    )
+) %}
 
-ARRAY -> "[" (_ MANYP[EXPRESSION]):? _ "]" {% formating((value) => {
-    return {
-        type: 'array',
-        values: value[1]?.[1],
-    }
-}) %}
+ARRAY -> "[" (_ MANYP[EXPRESSION]):? _ "]" {% format(
+    build(withType(ARRAY), withName('values')(drill(1, 1)))
+) %}
 
 # TODO: real regex parsing
 REGEX -> %regex %regex_content %regex_end
 
-TEMPLATE_STRING -> %template_string_start (%template_string_content | %template_string_interpreter _ EXPRESSION _ "}"):* %template_string_end
+TEMPLATE_STRING_LITERAL -> %template_string_content {% format(
+    build(withType(TEMPLATE_STRING_LITERAL), withName('value')(drill(0)))
+) %}
+TEMPLATE_STRING_INTERPRETATION -> %template_string_interpreter _ EXPRESSION _ "}" {% format(
+    build(withType(TEMPLATE_STRING_INTERPRETATION), withName('value')(drill(2)))
+) %}
+TEMPLATE_STRING -> %template_string_start (TEMPLATE_STRING_LITERAL | TEMPLATE_STRING_INTERPRETATION):* %template_string_end {% format(
+    build(withType(TEMPLATE_STRING), withName('parts')(drill(1)))
+) %}
 
 LITERAL -> (
 	"null"
@@ -530,7 +609,7 @@ LITERAL -> (
     | %exponential
     | %color
 	| %string 
-) {% format(build(withType(LITERAL), (value) => ({ value: drill(0, 0)(value) }))) %}
+) {% format(build(withType(LITERAL), withName('value')(drill(0, 0)))) %}
 
 BREAK -> %newline:+ | %file_end {% format(() => BREAK) %}
 
