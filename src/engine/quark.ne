@@ -15,6 +15,11 @@
         LEFT_INFIX_OVERLOAD,
         RIGHT_INFIX_OVERLOAD,
         STRUCT,
+        CALL,
+        MEMBER,
+        INDEX,
+        REFERENCE,
+        TYPE_REFERENCE,
     } = require('../src/engine/nodes.js')
 
     const debug = false
