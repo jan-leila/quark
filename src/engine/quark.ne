@@ -380,35 +380,63 @@ POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--")    
 
 KEY_WORD_PARAMETER -> %identifier _ "=" _ EXPRESSION {% formating((value) => ({name: value[0], value: value[4]})) %}
 CALL -> CHAIN_WRAP[CALL ("(" | "?(") (
-    _ MANYP[SEQUENCE] {% formating((value) => ({ params: value[1][0] })) %}
-    | _ MANYP[KEY_WORD_PARAMETER] {% formating((value) => ({ namedParams: value[1].map(did) })) %}
-    | _ MANY[SEQUENCE] _ "," _ MANYP[KEY_WORD_PARAMETER] {% formating((value) => ({ params: value[1][0], namedParams: value[5].map(did) })) %}
-):? _ ")" {% formating((value) => {
-    return {
-        type: 'call',
-        target: value[0],
-        nullish: value[1][0].value === '?(',
-        ...value[2],
-    }
-}) %}, MEMBER] {% formating(id) %}
-MEMBER -> CHAIN_WRAP[MEMBER ("." | "?.") _ %identifier {% formating((value) => {
-    return {
-        type: 'member',
-        target: value[0],
-        nullish: value[1][0].value === '?.',
-        member: value[3]
-    }
-}) %}, INDEX] {% formating(id) %}
-INDEX -> CHAIN_WRAP[INDEX ("[" | "?[") _ EXPRESSION _ "]" {% formating((value) => {
-    return {
-        type: 'index',
-        target: value[0],
-        nullish: value[1][0].value === '?[',
-        value: value[3]
-    }
-}) %}, REFERENCE] {% formating(id) %}
-REFERENCE -> CHAIN_WRAP[TYPE_REFERENCE "::" %identifier, TYPE_REFERENCE]
-TYPE_REFERENCE -> CHAIN_WRAP["::" VALUE, VALUE]
+    _ (
+        MANYP[SEQUENCE] {% format(
+            build(
+                withName('parameters')(drill(1)),
+                withName('namedParameters')(() => []),
+            ),
+        ) %}
+        | MANYP[KEY_WORD_PARAMETER] {% format(
+            build(
+                withName('parameters')(() => []),
+                withName('namedParameters')(drill(1)),
+            ),
+        ) %}
+        | MANY[SEQUENCE] _ "," _ MANYP[KEY_WORD_PARAMETER] {% format(
+            build(
+                withName('parameters')(drill(1)),
+                withName('namedParameters')(drill(5)),
+            ),
+        ) %}
+    ):?
+) _ ")" {% format(
+    build(
+        withType(CALL)
+        withName('safe')(chain(drill(1), (tree) => tree === '?(')),
+        withName('target')(drill(0)),
+        drill(2, 1)
+    )
+) %}, MEMBER] {% format(drill(0)) %}
+MEMBER -> CHAIN_WRAP[MEMBER ("." | "?.") %identifier {% format(
+    build(
+        withType(MEMBER),
+        withName('safe')(chain(drill(1), (tree) => tree === '?.')),
+        withName('target')(drill(0))
+        withName('property')(drill(2)),
+    )
+) %}, INDEX] {% format(drill(0)) %}
+INDEX -> CHAIN_WRAP[INDEX ("[" | "?[") _ EXPRESSION _ "]" {% format(
+    build(
+        withType(INDEX),
+        withName('safe')(chain(drill(1), (tree) => tree === '?[')),
+        withName('target')(drill(0)),
+        withName('property')(drill(3)),
+    )
+) %}, REFERENCE] {% format(drill(0)) %}
+REFERENCE      -> CHAIN_WRAP[TYPE_REFERENCE "::" %identifier {% format(
+    build(
+        withType(REFERENCE),
+        withName('target')(drill(0)),
+        withName('property')(drill(2)),
+    )
+) %}, TYPE_REFERENCE] {% format(drill(0)) %}
+TYPE_REFERENCE -> CHAIN_WRAP["::" VALUE {% () => (
+    build(
+        withType(TYPE_REFERENCE),
+        withName('target')(drill(1)),
+    )
+) %}, VALUE] {% format(drill(0)) %}
 
 VALUE -> 
     %identifier
