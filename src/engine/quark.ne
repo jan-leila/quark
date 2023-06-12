@@ -20,6 +20,12 @@
         INDEX,
         REFERENCE,
         TYPE_REFERENCE,
+        INFIX,
+        SEQUENCE,
+        WITH,
+        CONDITIONAL,
+        PREFIX,
+        POSTFIX,
     } = require('../src/engine/nodes.js')
 
     const debug = false
@@ -307,84 +313,76 @@ DECLARATION_TYPE -> ("let" | EXPRESSION "?":? (("[" "]") "?":?):*) {% formating(
 LABEL -> (%identifier _ ":" _) {% formating(did) %}
 
 @{%
-    const CHAIN_LEFT = Symbol('CHAIN_LEFT')
-    const CHAIN_RIGHT = Symbol('CHAIN_RIGHT')
-
-    const unwrap_operation = (processor) => {
-        return ([ tag, contents]) => {
-            switch(tag) {
-                case CHAIN_LEFT:
-                    return processor?.(contents) ?? contents
-                case CHAIN_RIGHT:
-                    return contents
-            }
-        }
-    }
-
-    const operation = (contents) => {
-        return {
-            type: 'operation',
-            class: 'infix',
-            operation: contents[2][0],
-            first: contents[0][0],
-            second: contents[4][0],
-        }
-    }
-
-    const prefix = (contents) => {
-        return {
-            type: 'operation',
-            class: 'prefix',
-            operation: contents[0][0],
-            contents: contents[2][0],
-        }
-    }
-
-    const postfix = (contents) => {
-        return {
-            type: 'operation',
-            class: 'postfix',
-            on: contents[0][0],
-            with: contents[2],
-        }
-    }
+    const formatInfix = format(
+        build(
+            withType(INFIX),
+            withName('operation')(drill(2)),
+            withName('left')(drill(0)),
+            withName('right')(drill(4)),
+        )
+    )
 %}
-CHAIN[LEFT] -> $LEFT {% formating(chain(id, tag(CHAIN_LEFT))) %} | $NEXT {% formating(chain(did, tag(CHAIN_RIGHT))) %}
-CHAIN_WRAP[SELF, NEXT] -> CHAIN[$SELF] {% formating(chain(id, unwrap_operation(id))) %}
-INFIX_OPERATOR[  SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN _ $NEXT] {% formating(chain(id, unwrap_operation(operation))) %}
-PREFIX_OPERATOR[ SELF, TOKEN, NEXT] -> CHAIN[$TOKEN _ $SELF         ] {% formating(chain(id, unwrap_operation(prefix))) %}
-POSTFIX_OPERATOR[SELF, TOKEN, NEXT] -> CHAIN[$SELF  _ $TOKEN        ] {% formating(chain(id, unwrap_operation(postfix))) %}
 
-EXPRESSION  -> CHAIN_WRAP[  MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION, SEQUENCE  ] {% formating(id) %}
-SEQUENCE    -> INFIX_OPERATOR[  SEQUENCE, ">>="     {% formating(id) %}, WITH        ] {% formating(id) %}
-WITH        -> PREFIX_OPERATOR[ WITH,     "with"    {% formating(id) %}, CONDITIONAL ] {% formating(id) %}
+EXPRESSION  -> MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION {% formatInfix %} | SEQUENCE
+SEQUENCE    -> SEQUENCE _ ">>=" _ WITH {% format(
+    build(
+        withType(SEQUENCE),
+        withName('target')(drill(0)),
+        withName('lambda')(drill(4)),
+    )
+) %} | WITH
+WITH        ->  "with" _ WITH {% format(
+    build(
+        withType(WITH),
+        withName('target')(drill(2)),
+    )
+) %} | CONDITIONAL
 
-CONDITIONAL -> CHAIN_WRAP[COALESCE _ "?" _ EXPRESSION _ ":" _ EXPRESSION {% formating((value) => {
-    return {
-        type: 'ternary',
-        condition: value[0],
-        left: value[4],
-        right: value[6],
-    }
-}) %}, COALESCE]
+CONDITIONAL -> COALESCE _ "?" _ EXPRESSION _ ":" _ EXPRESSION {% format(
+    build(
+        withType(CONDITIONAL),
+        withName('condition')(drill(0)),
+        withName('first')(drill(4)),
+        withName('second')(drill(8)),
+    )
+) %} | COALESCE
 
-COALESCE    -> INFIX_OPERATOR[  COALESCE,    "??"                                   {% formating(id) %}, OR          ] {% formating(id) %}
-OR          -> INFIX_OPERATOR[  OR,          "||"                                   {% formating(id) %}, AND         ] {% formating(id) %}
-AND         -> INFIX_OPERATOR[  AND,         "&&"                                   {% formating(id) %}, BIT_OR      ] {% formating(id) %}
-BIT_OR      -> INFIX_OPERATOR[  BIT_OR,      "|"                                    {% formating(id) %}, BIT_XOR     ] {% formating(id) %}
-BIT_XOR     -> INFIX_OPERATOR[  BIT_XOR,     "^"                                    {% formating(id) %}, BIT_AND     ] {% formating(id) %}
-BIT_AND     -> INFIX_OPERATOR[  BIT_AND,     "&"                                    {% formating(id) %}, EQUALITY    ] {% formating(id) %}
-EQUALITY    -> INFIX_OPERATOR[  EQUALITY,    ("==" | "!=")                          {% formating(id) %}, COMPARISON  ] {% formating(id) %}
-COMPARISON  -> INFIX_OPERATOR[  COMPARISON,  (">=" | "<=" | "<" | ">")              {% formating(id) %}, SHIFT       ] {% formating(id) %}
-SHIFT       -> INFIX_OPERATOR[  SHIFT,       ("<<<" | ">>>" | "<<" | ">>")          {% formating(id) %}, SUM         ] {% formating(id) %}
-SUM         -> INFIX_OPERATOR[  SUM,         ("+" | "-")                            {% formating(id) %}, PRODUCT     ] {% formating(id) %}
-PRODUCT     -> INFIX_OPERATOR[  PRODUCT,     ("*" | "/" | "%")                      {% formating(id) %}, POWER       ] {% formating(id) %}
-POWER       -> INFIX_OPERATOR[  POWER,       "**"                                   {% formating(id) %}, PREFIX      ] {% formating(id) %}
-PREFIX      -> PREFIX_OPERATOR[ PREFIX,      ("!" | "~" | "-" | "++" | "--")        {% formating(id) %}, POSTFIX     ] {% formating(id) %}
-POSTFIX     -> POSTFIX_OPERATOR[POSTFIX,     ("!" | "~" | "-" | "++" | "--")        {% formating(id) %}, CALL        ] {% formating(id) %}
+COALESCE -> COALESCE _ "??" _ OR {% formatInfix %} | OR
+OR -> OR _ "||" _ AND {% formatInfix %} | AND
+AND -> AND _ "&&" _ BIT_OR {% formatInfix %} | BIT_OR
+BIT_OR -> BIT_OR _ "|" _ BIT_XOR {% formatInfix %} | BIT_XOR
+BIT_XOR -> BIT_XOR _ "^" _ BIT_AND {% formatInfix %} | BIT_AND
+BIT_AND -> BIT_AND _ "&" _ EQUALITY {% formatInfix %} | EQUALITY
+EQUALITY -> EQUALITY _ ("==" | "!=") _ COMPARISON {% formatInfix %} | COMPARISON
+COMPARISON -> COMPARISON _ (">=" | "<=" | "<" | ">") _ SHIFT {% formatInfix %} | SHIFT
+SHIFT -> SHIFT _ ("<<<" | ">>>" | "<<" | ">>") _ SUM {% formatInfix %} | SUM
+SUM -> SUM _ ("+" | "-") _ PRODUCT {% formatInfix %} | PRODUCT
+PRODUCT -> PRODUCT _ ("*" | "/" | "%") _ POWER {% formatInfix %} | POWER
+POWER -> POWER _ "**" _ PREFIX {% formatInfix %} | PREFIX
 
-KEY_WORD_PARAMETER -> %identifier _ "=" _ EXPRESSION {% formating((value) => ({name: value[0], value: value[4]})) %}
-CALL -> CHAIN_WRAP[CALL ("(" | "?(") (
+PREFIX      -> ("!" | "~" | "-" | "++" | "--") _ PREFIX {% format(
+    build(
+        withType(PREFIX),
+        withName('operation')(drill(0)),
+        withName('target')(drill(2)),
+    )
+)%} | POSTFIX
+
+POSTFIX     -> POSTFIX _ ("!" | "~" | "-" | "++" | "--") {% format(
+    build(
+        withType(POSTFIX),
+        withName('target')(drill(0)),
+        withName('operation')(drill(2)),
+    )
+)%} | CALL
+
+KEY_WORD_PARAMETER -> %identifier _ "=" _ EXPRESSION {% format(
+    build(
+        withName('name')(drill(0)),
+        withName('value')(drill(4)),
+    ),
+) %}
+CALL -> CALL ("(" | "?(") (
     _ (
         MANYP[SEQUENCE] {% format(
             build(
@@ -407,41 +405,41 @@ CALL -> CHAIN_WRAP[CALL ("(" | "?(") (
     ):?
 ) _ ")" {% format(
     build(
-        withType(CALL)
+        withType(CALL),
         withName('safe')(chain(drill(1), (tree) => tree === '?(')),
         withName('target')(drill(0)),
         drill(2, 1)
     )
-) %}, MEMBER] {% format(drill(0)) %}
-MEMBER -> CHAIN_WRAP[MEMBER ("." | "?.") %identifier {% format(
+) %} | MEMBER
+MEMBER -> MEMBER ("." | "?.") %identifier {% format(
     build(
         withType(MEMBER),
         withName('safe')(chain(drill(1), (tree) => tree === '?.')),
-        withName('target')(drill(0))
+        withName('target')(drill(0)),
         withName('property')(drill(2)),
     )
-) %}, INDEX] {% format(drill(0)) %}
-INDEX -> CHAIN_WRAP[INDEX ("[" | "?[") _ EXPRESSION _ "]" {% format(
+) %} | INDEX
+INDEX -> INDEX ("[" | "?[") _ EXPRESSION _ "]" {% format(
     build(
         withType(INDEX),
         withName('safe')(chain(drill(1), (tree) => tree === '?[')),
         withName('target')(drill(0)),
         withName('property')(drill(3)),
     )
-) %}, REFERENCE] {% format(drill(0)) %}
-REFERENCE      -> CHAIN_WRAP[TYPE_REFERENCE "::" %identifier {% format(
+) %} | REFERENCE
+REFERENCE      -> TYPE_REFERENCE "::" %identifier {% format(
     build(
         withType(REFERENCE),
         withName('target')(drill(0)),
         withName('property')(drill(2)),
     )
-) %}, TYPE_REFERENCE] {% format(drill(0)) %}
-TYPE_REFERENCE -> CHAIN_WRAP["::" VALUE {% () => (
+) %} | TYPE_REFERENCE
+TYPE_REFERENCE -> "::" VALUE {% () => (
     build(
         withType(TYPE_REFERENCE),
         withName('target')(drill(1)),
     )
-) %}, VALUE] {% format(drill(0)) %}
+) %} | VALUE
 
 VALUE -> 
     %identifier

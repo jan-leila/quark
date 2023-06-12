@@ -20,4 +20,10 @@ module.exports = {
   INDEX: Symbol("INDEX"),
   REFERENCE: Symbol("REFERENCE"),
   TYPE_REFERENCE: Symbol("TYPE_REFERENCE"),
+  INFIX: Symbol("INFIX"),
+  SEQUENCE: Symbol("SEQUENCE"),
+  WITH: Symbol("WITH"),
+  CONDITIONAL: Symbol("CONDITIONAL"),
+  PREFIX: Symbol("PREFIX"),
+  POSTFIX: Symbol("POSTFIX"),
 }
