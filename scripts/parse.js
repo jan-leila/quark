@@ -2,7 +2,9 @@ const fs = require('fs');
 const util = require('util');
 const parser = require('../src/engine/parser.js');
 
-const file = fs.readFileSync('examples/example-project/index.qk', "utf-8");
+const filePath = process.argv[2] ?? 'examples/example-project/index.qk'
+
+const file = fs.readFileSync(filePath, "utf-8");
 parser.feed(file);
 
 // console.log("-------------------------------");
@@ -43,6 +45,6 @@ const differences = (object_1, object_2) => {
 //   })
 // }
 
-// console.log(util.inspect(parser.results[0], { showHidden: false, depth: null, colors: true }));
+console.log(util.inspect(parser.results[0], { showHidden: false, depth: null, colors: true }));
 // parser.results[1] && console.log(util.inspect(parser.results[1], { showHidden: false, depth: null, colors: true }));
 console.log(`valid parsings: ${parser.results.length}`);
