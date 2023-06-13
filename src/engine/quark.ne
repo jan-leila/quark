@@ -323,20 +323,20 @@ LABEL -> (%identifier _ ":" _) {% formating(did) %}
     )
 %}
 
-EXPRESSION  -> MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION {% formatInfix %} | SEQUENCE
+EXPRESSION  -> MULTI_FUNCTION_ARGUMENT _ "=>" _ EXPRESSION {% formatInfix %} | SEQUENCE {% format(drill(0)) %}
 SEQUENCE    -> SEQUENCE _ ">>=" _ WITH {% format(
     build(
         withType(SEQUENCE),
         withName('target')(drill(0)),
         withName('lambda')(drill(4)),
     )
-) %} | WITH
+) %} | WITH {% format(drill(0)) %}
 WITH        ->  "with" _ WITH {% format(
     build(
         withType(WITH),
         withName('target')(drill(2)),
     )
-) %} | CONDITIONAL
+) %} | CONDITIONAL {% format(drill(0)) %}
 
 CONDITIONAL -> COALESCE _ "?" _ EXPRESSION _ ":" _ EXPRESSION {% format(
     build(
@@ -345,20 +345,20 @@ CONDITIONAL -> COALESCE _ "?" _ EXPRESSION _ ":" _ EXPRESSION {% format(
         withName('first')(drill(4)),
         withName('second')(drill(8)),
     )
-) %} | COALESCE
+) %} | COALESCE {% format(drill(0)) %}
 
-COALESCE -> COALESCE _ "??" _ OR {% formatInfix %} | OR
-OR -> OR _ "||" _ AND {% formatInfix %} | AND
-AND -> AND _ "&&" _ BIT_OR {% formatInfix %} | BIT_OR
-BIT_OR -> BIT_OR _ "|" _ BIT_XOR {% formatInfix %} | BIT_XOR
-BIT_XOR -> BIT_XOR _ "^" _ BIT_AND {% formatInfix %} | BIT_AND
-BIT_AND -> BIT_AND _ "&" _ EQUALITY {% formatInfix %} | EQUALITY
-EQUALITY -> EQUALITY _ ("==" | "!=") _ COMPARISON {% formatInfix %} | COMPARISON
-COMPARISON -> COMPARISON _ (">=" | "<=" | "<" | ">") _ SHIFT {% formatInfix %} | SHIFT
-SHIFT -> SHIFT _ ("<<<" | ">>>" | "<<" | ">>") _ SUM {% formatInfix %} | SUM
-SUM -> SUM _ ("+" | "-") _ PRODUCT {% formatInfix %} | PRODUCT
-PRODUCT -> PRODUCT _ ("*" | "/" | "%") _ POWER {% formatInfix %} | POWER
-POWER -> POWER _ "**" _ PREFIX {% formatInfix %} | PREFIX
+COALESCE -> COALESCE _ "??" _ OR {% formatInfix %} | OR {% format(drill(0)) %}
+OR -> OR _ "||" _ AND {% formatInfix %} | AND {% format(drill(0)) %}
+AND -> AND _ "&&" _ BIT_OR {% formatInfix %} | BIT_OR {% format(drill(0)) %}
+BIT_OR -> BIT_OR _ "|" _ BIT_XOR {% formatInfix %} | BIT_XOR {% format(drill(0)) %}
+BIT_XOR -> BIT_XOR _ "^" _ BIT_AND {% formatInfix %} | BIT_AND {% format(drill(0)) %}
+BIT_AND -> BIT_AND _ "&" _ EQUALITY {% formatInfix %} | EQUALITY {% format(drill(0)) %}
+EQUALITY -> EQUALITY _ ("==" | "!=") _ COMPARISON {% formatInfix %} | COMPARISON {% format(drill(0)) %}
+COMPARISON -> COMPARISON _ (">=" | "<=" | "<" | ">") _ SHIFT {% formatInfix %} | SHIFT {% format(drill(0)) %}
+SHIFT -> SHIFT _ ("<<<" | ">>>" | "<<" | ">>") _ SUM {% formatInfix %} | SUM {% format(drill(0)) %}
+SUM -> SUM _ ("+" | "-") _ PRODUCT {% formatInfix %} | PRODUCT {% format(drill(0)) %}
+PRODUCT -> PRODUCT _ ("*" | "/" | "%") _ POWER {% formatInfix %} | POWER {% format(drill(0)) %}
+POWER -> POWER _ "**" _ PREFIX {% formatInfix %} | PREFIX {% format(drill(0)) %}
 
 PREFIX      -> ("!" | "~" | "-" | "++" | "--") _ PREFIX {% format(
     build(
@@ -366,7 +366,7 @@ PREFIX      -> ("!" | "~" | "-" | "++" | "--") _ PREFIX {% format(
         withName('operation')(drill(0)),
         withName('target')(drill(2)),
     )
-)%} | POSTFIX
+)%} | POSTFIX {% format(drill(0)) %}
 
 POSTFIX     -> POSTFIX _ ("!" | "~" | "-" | "++" | "--") {% format(
     build(
@@ -374,7 +374,7 @@ POSTFIX     -> POSTFIX _ ("!" | "~" | "-" | "++" | "--") {% format(
         withName('target')(drill(0)),
         withName('operation')(drill(2)),
     )
-)%} | CALL
+)%} | CALL {% format(drill(0)) %}
 
 KEY_WORD_PARAMETER -> %identifier _ "=" _ EXPRESSION {% format(
     build(
@@ -410,7 +410,7 @@ CALL -> CALL ("(" | "?(") (
         withName('target')(drill(0)),
         drill(2, 1)
     )
-) %} | MEMBER
+) %} | MEMBER {% format(drill(0)) %}
 MEMBER -> MEMBER ("." | "?.") %identifier {% format(
     build(
         withType(MEMBER),
@@ -418,7 +418,7 @@ MEMBER -> MEMBER ("." | "?.") %identifier {% format(
         withName('target')(drill(0)),
         withName('property')(drill(2)),
     )
-) %} | INDEX
+) %} | INDEX {% format(drill(0)) %}
 INDEX -> INDEX ("[" | "?[") _ EXPRESSION _ "]" {% format(
     build(
         withType(INDEX),
@@ -426,20 +426,20 @@ INDEX -> INDEX ("[" | "?[") _ EXPRESSION _ "]" {% format(
         withName('target')(drill(0)),
         withName('property')(drill(3)),
     )
-) %} | REFERENCE
+) %} | REFERENCE {% format(drill(0)) %}
 REFERENCE      -> TYPE_REFERENCE "::" %identifier {% format(
     build(
         withType(REFERENCE),
         withName('target')(drill(0)),
         withName('property')(drill(2)),
     )
-) %} | TYPE_REFERENCE
+) %} | TYPE_REFERENCE {% format(drill(0)) %}
 TYPE_REFERENCE -> "::" VALUE {% () => (
     build(
         withType(TYPE_REFERENCE),
         withName('target')(drill(1)),
     )
-) %} | VALUE
+) %} | VALUE {% format(drill(0)) %}
 
 VALUE -> 
     %identifier
