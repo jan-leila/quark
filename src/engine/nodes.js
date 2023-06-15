@@ -26,4 +26,8 @@ module.exports = {
   CONDITIONAL: Symbol("CONDITIONAL"),
   PREFIX: Symbol("PREFIX"),
   POSTFIX: Symbol("POSTFIX"),
+  DECLARATION: Symbol("DECLARATION"),
+  INLINE_SEQUENCE: Symbol("INLINE_SEQUENCE"),
+  ASSIGNMENT: Symbol("ASSIGNMENT"),
+  AUTO_TYPE: Symbol("AUTO_TYPE"),
 }

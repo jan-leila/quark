@@ -26,6 +26,10 @@
         CONDITIONAL,
         PREFIX,
         POSTFIX,
+        DECLARATION,
+        INLINE_SEQUENCE,
+        ASSIGNMENT,
+        AUTO_TYPE,
     } = require('../src/engine/nodes.js')
 
     const debug = false
@@ -41,11 +45,13 @@
     const did = value => value[0][0];
     const tag = (name, lambda) => (it) => [name, lambda?.(it) ?? it]
 
-    const format = debug ? ()  => (tree) => tree : (lambda)                  => lambda
+    const format = debug ? ()  => (tree) => tree : (lambda) => lambda
+
     const drill = (...offsets) => (tree) => offsets.reduce((subtree, offset) => subtree?.[offset], tree)
-    const chain = (...lambdas) => (tree) => lambdas.reduce((data, lambda)    => lambda(data), tree)
-    const build = (...lambdas) => (tree) => lambdas.reduce((data, lambda)    => ({ ...data, ...(lambda?.(tree) ?? {}) }), {})
-    const each =  (lambda)     => (tree) => tree.map((subTree)               => lambda(subTree))
+    const chain = (...lambdas) => (tree, context) => lambdas.reduce((data, lambda) => lambda(data, context), tree)
+    const build = (...lambdas) => (tree, context) => lambdas.reduce((data, lambda) => ({ ...data, ...(lambda?.(tree, context) ?? {}) }), {})
+    
+    const each =  (lambda) => (tree, context) => tree.map((subTree) => lambda(subTree, context))
 
     const withLog = (lambda) => (tree) => {
         const value = lambda(tree)
@@ -284,33 +290,53 @@ FOR -> LABEL:? "for" _ "(" _ DECLARATION_IDENTIFIER _ ":" _ EXPRESSION _ ")" _ U
         contents: value[13]
     }
 }) %}
-DECLARATION -> DECLARATION_TYPE _ MANYP[DECLARATION_IDENTIFIER (_ "=" _ EXPRESSION):?] {% formating((value) => {
-    return {
-        type: 'declaration',
-        data_type: value[0],
-        names: value[2],
-        value: value[3]?.[3],
-    }
-}) %}
-INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSION {% formating((value) => {
-    return {
-        type: 'inline_sequence',
-        data_type: value[0],
-        name: value[2],
-        value: value[6],
-    }
-}) %}
-ASSIGNMENT -> %identifier _ %assignment _ EXPRESSION {% formating((value) => {
-    return {
-        type: 'assignment',
-        assignment_type: value[2],
-        name: value[0],
-        value: value[4],
-    }
-}) %}
-DECLARATION_TYPE -> ("let" | EXPRESSION "?":? (("[" "]") "?":?):*) {% formating(did) %}
 
-LABEL -> (%identifier _ ":" _) {% formating(did) %}
+DECLARATION -> DECLARATION_TYPE _ MANYP[DECLARATION_PARTS] {% format(
+    chain(
+        build(
+            withType(DECLARATION),
+            withName('data_type')(drill(0)),
+            withName('parts')(drill(2)),
+        ),
+    )
+) %}
+DECLARATION_PARTS -> %identifier {% format(
+    build(
+        withName('identifier')(drill(0)),
+    )
+) %} | DECLARATION_IDENTIFIER (_ "=" _ EXPRESSION):? {% format(
+    build(
+        withName('identifier')(drill(0)),
+        withName('value')(drill(1, 3)),
+    )
+) %}
+INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSION {% format(
+    build(
+        withType(INLINE_SEQUENCE),
+        withName('data_type')(drill(0)),
+        withName('name')(drill(2)),
+        withName('value')(drill(6)),
+    )
+) %}
+ASSIGNMENT -> %identifier _ %assignment _ EXPRESSION {% format(
+    build(
+        withType(ASSIGNMENT),
+        withName('assignment_type')(drill(2)),
+        withName('name')(drill(0)),
+        withName('value')(drill(4)),
+    )
+) %}
+DECLARATION_TYPE -> "let" {% format(
+    build(
+        withName('type')(() => AUTO_TYPE)
+    )
+) %} | EXPRESSION "?":? ("[" "]" "?":?):* {% format(
+    build(
+        withName('type')(drill(0))
+    )
+) %}
+
+LABEL -> %identifier _ ":" _ {% format(drill(0)) %}
 
 @{%
     const formatInfix = format(
@@ -387,19 +413,19 @@ CALL -> CALL ("(" | "?(") (
         MANYP[SEQUENCE] {% format(
             build(
                 withName('parameters')(drill(1)),
-                withName('namedParameters')(() => []),
+                withName('named_parameters')(() => []),
             ),
         ) %}
         | MANYP[KEY_WORD_PARAMETER] {% format(
             build(
                 withName('parameters')(() => []),
-                withName('namedParameters')(drill(1)),
+                withName('named_parameters')(drill(1)),
             ),
         ) %}
         | MANY[SEQUENCE] _ "," _ MANYP[KEY_WORD_PARAMETER] {% format(
             build(
                 withName('parameters')(drill(1)),
-                withName('namedParameters')(drill(5)),
+                withName('named_parameters')(drill(5)),
             ),
         ) %}
     ):?
@@ -442,15 +468,15 @@ TYPE_REFERENCE -> "::" VALUE {% () => (
 ) %} | VALUE {% format(drill(0)) %}
 
 VALUE -> 
-    %identifier
-    | LITERAL
-    | TEMPLATE_STRING
-    | REGEX
-    | STATEMENT_FUNCTION
-    | ARRAY
-    | STRUCT
-    | FUNCTION_SIGNATURE
-    | GROUPING
+    %identifier {% format(drill(0)) %}
+    | LITERAL {% format(drill(0)) %}
+    | TEMPLATE_STRING {% format(drill(0)) %}
+    | REGEX {% format(drill(0)) %}
+    | STATEMENT_FUNCTION {% format(drill(0)) %}
+    | ARRAY {% format(drill(0)) %}
+    | STRUCT {% format(drill(0)) %}
+    | FUNCTION_SIGNATURE {% format(drill(0)) %}
+    | GROUPING {% format(drill(0)) %}
 
 GROUPING -> "(" _ EXPRESSION _ ")" {% format(drill(2)) %}
 
@@ -527,13 +553,13 @@ STRUCT -> "{"
 
 STRUCT_ARGUMENTS -> DECLARATION_TYPE _ MANY[%identifier] {% format(
     build(
-        withName('argumentsType')(drill(0)),
+        withName('arguments_type')(drill(0)),
         withName('names')(drill(2))
     )
 ) %}
 STRUCT_OPTIONALS -> DECLARATION_TYPE _ MANY[STRUCT_OPTIONAL_NAME] {% format(
     build(
-        withName('optinalsType')(drill(0)),
+        withName('optinals_type')(drill(0)),
         withName('values')(drill(2))
     )
 ) %}
@@ -597,8 +623,8 @@ SINGLE_FUNCTION_ARGUMENT -> "(" _ (FUNCTION_ARGUMENT _):? ")" {% format(
 ) %}
 FUNCTION_ARGUMENT -> (EXPRESSION _):? DECLARATION_IDENTIFIER {% format(
     build(
-        withName('argumentType')(drill(0, 0)),
-        withName('argumentName')(drill(1)),
+        withName('argument_type')(drill(0, 0)),
+        withName('argument_name')(drill(1)),
     )
 ) %}
 # TODO: destructuring objects and arrays
@@ -610,7 +636,7 @@ FUNCTION_SIGNATURE -> "(" (_ MANYP[EXPRESSION]):? _ ")" _ "->" _ EXPRESSION (_ "
         withType(FUNCTION_SIGNATURE),
         withName('paramTypes')(drill(1, 1)),
         withName('returnType')(drill(7)),
-        withName('explicitUseTypes')(drill(8, 3)),
+        withName('explicit_use_types')(drill(8, 3)),
     )
 ) %}
 
