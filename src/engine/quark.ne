@@ -321,11 +321,12 @@ INLINE_SEQUENCE -> DECLARATION_TYPE _ DECLARATION_IDENTIFIER _ "<<=" _ EXPRESSIO
 ASSIGNMENT -> %identifier _ %assignment _ EXPRESSION {% format(
     build(
         withType(ASSIGNMENT),
-        withName('assignment_type')(drill(2)),
         withName('name')(drill(0)),
+        withName('assignment_type')(drill(2)),
         withName('value')(drill(4)),
     )
 ) %}
+
 DECLARATION_TYPE -> "let" {% format(
     build(
         withName('type')(() => AUTO_TYPE)
