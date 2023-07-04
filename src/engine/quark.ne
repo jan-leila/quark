@@ -26,6 +26,10 @@
         CONDITIONAL,
         PREFIX,
         POSTFIX,
+        DO_IF,
+        DO_WHILE,
+        DO,
+        FOR,
         DECLARATION,
         INLINE_SEQUENCE,
         ASSIGNMENT,
@@ -250,55 +254,53 @@ WHILE -> LABEL:? "while" _ CONDITION _ UNSCOPED_STATEMENT {% formating((value) =
         contents: value[5]
     }
 }) %}
-DO_IF -> DO _ "if" _ CONDITION {% formating((value) => {
-    return {
-        ...value[0],
-        type: 'do_if',
-        condition: value[4]
-    }
-}) %}
-DO_WHILE -> DO _ "while" _ CONDITION {% formating((value) => {
-    return {
-        ...value[0],
-        type: 'do_while',
-        condition: value[4]
-    }
-}) %}
+DO_IF -> DO _ "if" _ CONDITION {% format(
+    build(
+        withType(DO_IF),
+        withName('body')(drill(0)),
+        withName('condition')(drill(4)),
+    )
+) %}
+DO_WHILE -> DO _ "while" _ CONDITION {% format(
+    build(
+        withType(DO_WHILE),
+        withName('body')(drill(0)),
+        withName('condition')(drill(4)),
+    )
+) %}
 
-DO -> LABEL:? "do" _ UNSCOPED_STATEMENT (_ HANDLE):* {% formating((value) => {
-    return {
-        type: 'do',
-        label: value[0],
-        handles: value[4].map((value) => value[1]),
-        contents: value[3]
-    }
-}) %}
-HANDLE -> "handle" _ MANY[EXPRESSION] _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% formating((value) => {
-    return {
-        handle_types: value[2],
-        argument: value[4],
-        contents: value[6]
-    }
-}) %}
+DO -> LABEL:? "do" _ UNSCOPED_STATEMENT (_ HANDLE):* {% format(
+    build(
+        withType(DO),
+        withName('label')(drill(0)),
+        withName('body')(drill(3)),
+        withName('handles')(drill(4)),
+    )
+) %}
+HANDLE -> "handle" _ MANY[EXPRESSION] _ SINGLE_FUNCTION_ARGUMENT _ UNSCOPED_STATEMENT {% format(
+    build(
+        withName('types')(drill(2)),
+        withName('argument')(drill(4)),
+        withName('body')(drill(6))
+    )
+) %}
 
-FOR -> LABEL:? "for" _ "(" _ DECLARATION_IDENTIFIER _ ":" _ EXPRESSION _ ")" _ UNSCOPED_STATEMENT {% formating(() => {
-    return {
-        type: 'for',
-        label: value[0],
-        name: value[5],
-        target: value[9],
-        contents: value[13]
-    }
-}) %}
+FOR -> LABEL:? "for" _ "(" _ DECLARATION_IDENTIFIER _ ":" _ EXPRESSION _ ")" _ UNSCOPED_STATEMENT {% format(
+    build(
+        withType(FOR),
+        withName('label')(drill(0)),
+        withName('identifier')(drill(5)),
+        withName('producer')(drill(9)),
+        withName('body')(drill(13)),
+    )
+) %}
 
 DECLARATION -> DECLARATION_TYPE _ MANYP[DECLARATION_PARTS] {% format(
-    chain(
-        build(
-            withType(DECLARATION),
-            withName('data_type')(drill(0)),
-            withName('parts')(drill(2)),
-        ),
-    )
+    build(
+        withType(DECLARATION),
+        withName('data_type')(drill(0)),
+        withName('parts')(drill(2)),
+    ),
 ) %}
 DECLARATION_PARTS -> %identifier {% format(
     build(
