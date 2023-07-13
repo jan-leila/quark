@@ -36,4 +36,15 @@ module.exports = {
   WHILE: Symbol("WHILE"),
   SWITCH: Symbol("SWITCH"),
   IF: Symbol("IF"),
+  BLOCK: Symbol("BLOCK"),
+  BREAK: Symbol("BREAK"),
+  CONTINUE: Symbol("CONTINUE"),
+  RETURN: Symbol("RETURN"),
+  USE: Symbol("USE"),
+  EXPORT_STATEMENT: Symbol("EXPORT_STATEMENT"),
+  BLOCK: Symbol("BLOCK"),
+  CONTINUE: Symbol("CONTINUE"),
+  RETURN: Symbol("RETURN"),
+  USE: Symbol("USE"),
+  DEPENDENCY: Symbol("DEPENDENCY")
 }

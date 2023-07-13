@@ -37,6 +37,12 @@
         WHILE,
         SWITCH,
         IF,
+        EXPORT_STATEMENT,
+        BLOCK,
+        CONTINUE,
+        RETURN,
+        USE,
+        DEPENDENCY,
     } = require('../src/engine/nodes.js')
 
     const debug = false
@@ -68,109 +74,168 @@
     }
     const withType = (type) => (tree) => ({ type })
     const withName = (name) => (lambda) => (tree) => ({ [name]: lambda(tree) })
-    /*
-    const withDrill = (name, ...offsets) => {
-        const activeDrill = drill(...offsets)
-        return (tree) => ({[name]: activeDrill(tree)})
-    }
-    */
 %}
 
 @lexer lexer
 
-MANY[T] -> $T (_ "," _ $T):* {% formating((value) => {
-    return [
-        value[0],
-        ...value[1].map((next_value) => {
-            return next_value[3]
-        })
-    ]
-}) %}
-MANYP[T] -> MANY[$T] (_ ","):? {% formating((value) => {
-    return value[0]
-}) %}
+MANY[T] -> $T (_ "," _ $T):* {% format(
+    join(chain(drill(0), (value) => [value]), chain(drill(1), each(drill(3))))
+) %}
+MANYP[T] -> MANY[$T] (_ ","):? {% format(drill(0)) %}
 
-ROOT -> _ %file_end | (_ IMPORT {% formating((value) => value[1]) %}):* (_ TOP_STATEMENT {% formating(([_, statement]) => statement) %}):* {% formating(([ imports, statements]) => {
-    return {
-        imports,
-        statements,
-    }
-}) %}
+ROOT -> _ %file_end | (_ IMPORT):* (_ TOP_STATEMENT):* {% format(
+    build(
+        withName('imports')(chain(drill(0), each(drill(1)))),
+        withName('statements')(chain(drill(1), each(drill(1)))),
+    )
+) %}
 
-IMPORT -> "import" _ (IMPORT_MAP {% formating((value) => {
-    return {
-        default: null,
-        named: value[0],
-    }
-}) %} | %identifier (_ IMPORT_MAP):? {% formating((value) => {
-    return {
-        default: value[0],
-        named: value[1]?.[1] ?? [],
-    }
-}) %}) _ "from" _ IMPORT_TARGET BREAK {% formating((value) => {
-    return {
-        imports: value[2],
-        from: value[6],
-    }
-}) %}
-IMPORT_MAP -> "{" (_ MANY[IMPORT_NAME]):? _ "}" {% formating((value) => {
-    return value[1]?.[1] ?? []
-}) %}
-IMPORT_NAME -> %identifier (_ "as" _ %identifier):? {% formating((value) => {
-    return {
-        target: value[0],
-        as: value[1]?.[3] ?? value[0],
-    }
-}) %}
+IMPORT -> "import" _ (
+    IMPORT_MAP {% format(
+        drill(0)
+    ) %}
+    | %identifier {% format(
+        chain(
+            build(
+                withName('target')(drill(0)),
+                withName('as')(drill(0)),
+            ),
+            (value) => [value],
+        )
+    ) %}
+    | %identifier _ IMPORT_MAP {% format(
+        join(
+            chain(
+                build(
+                    withName('target')(drill(0)),
+                    withName('as')(drill(0)),
+                ),
+                (value) => [value],
+            ),
+            drill(2),
+        )
+    ) %}
+) _ "from" _ IMPORT_TARGET BREAK {% format(
+    build(
+        withName('imports')(drill(2)),
+        withName('from')(drill(6)),
+    )
+) %}
+IMPORT_MAP -> "{" _ MANY[IMPORT_NAME] _ "}" {% format(drill(2)) %}
+IMPORT_NAME -> %identifier {% format(
+    build(
+        withName('target')(drill(0)),
+        withName('as')(drill(0)),
+    )
+) %} | %identifier _ "as" _ %identifier {% format(
+    build(
+        withName('target')(drill(0)),
+        withName('as')(drill(4)),
+    )
+) %}
 
-IMPORT_TARGET -> (FILE | DEPENDENCY) {% formating(did) %}
-DEPENDENCY -> FILE_PATH ("@" FILE_PART):? {% formating((value) => {
-    return {
-        type: 'dependency',
-        source: value[1]?.[1],
-        package: value[0],
-    }
-})%}
-FILE -> ("." {% formating(() => 0) %} | ".." ("/" ".."):* {% formating((value) => 1 + value[1].length) %}):? "/" FILE_PATH {% formating((value) => {
-    return {
-        type: 'file',
-        path: value[2],
-        relitive: value[0] ?? -1,
-    }
-}) %}
-FILE_PATH -> FILE_PART ("/" FILE_PART):* {% formating((value) => {
-    return [value[0], ...(value[1].map((value) => value[1]))]
-}) %}
-FILE_PART -> (%identifier | %filepart) {% formating(did) %}
+IMPORT_TARGET -> (FILE | DEPENDENCY) {% format(drill(0, 0)) %}
+DEPENDENCY -> FILE_PATH ("@" FILE_PART):? {% format(
+    build(
+        withType(DEPENDENCY),
+        withName('source')(drill(1, 1)),
+        withName('package')(drill(0)),
+    )
+) %}
+FILE -> ("." {% format(() => 0) %} | ".." ("/" ".."):* {% format((value) => 1 + value[1].length) %}):? "/" FILE_PATH {% format(
+    build(
+        withName('path')(drill(2)),
+        withName('relitive')(drill(0))
+    )
+) %}
+FILE_PATH -> FILE_PART ("/" FILE_PART):* {% format(
+    join(
+        chain(
+            drill(0),
+            (value) => [value],
+        ),
+        chain(
+            drill(1),
+            each(
+                drill(1)
+            ),
+        )
+    )
+) %}
+FILE_PART -> (%identifier | %filepart) {% format(drill(0, 0)) %}
 
-TOP_STATEMENT -> (STATEMENT | EXPORT_STATEMENT) _ BREAK {% formating(did) %}
+TOP_STATEMENT -> (STATEMENT | EXPORT_STATEMENT) _ BREAK {% format(drill(0, 0)) %}
 
-EXPORT_STATEMENT -> "export" _ MANYP[EXPORT_NAME] {% formating((value) => {
-    return {
-        type: 'export',
-        targets: value[2]
-    }
-})%}
-EXPORT_NAME -> %identifier {% formating((value) => {
-    return {
-        target: value[0],
-        as: value[0],
-    }
-}) %} | EXPRESSION _ "as" _ (%identifier | "default") {% formating((value) => {
-    return {
-        target: value[0],
-        as: value[3],
-    }
-}) %}
+EXPORT_NAME -> %identifier {% format(
+    build(
+        withName('target')(drill(0)),
+        withName('as')(drill(0)),
+    )
+) %} | EXPRESSION _ "as" _ %identifier {% format(
+    build(
+        withName('target')(drill(0)),
+        withName('as')(drill(3)),
+    )
+) %}
+DEFAULT_EXPORT -> EXPRESSION _ "as" _ "default" {% format(
+    build(
+        withName('target')(drill(0)),
+        withName('as')(drill(3)),
+    )
+) %}
+EXPORT_STATEMENT -> "export" _ (
+    DEFAULT_EXPORT {% format(
+        chain(
+            drill(0),
+            (value) => [value],
+        )
+    ) %}
+    | MANYP[EXPORT_NAME] {% format(
+        drill(0)
+    ) %}
+    | DEFAULT_EXPORT _ "," _ MANYP[EXPORT_NAME] {% format(
+        join(
+            chain(
+                drill(0),
+                (value) => [value],
+            ),
+            drill(4),
+        )
+    ) %}
+    | MANYP[EXPORT_NAME] _ "," _ DEFAULT_EXPORT  {% format(
+        join(
+            drill(4),
+            chain(
+                drill(0),
+                (value) => [value],
+            )
+        )
+    ) %}
+    | MANYP[EXPORT_NAME] _ "," _ DEFAULT_EXPORT _ "," _ MANYP[EXPORT_NAME]  {% format(
+        join(
+            drill(4),
+            chain(
+                drill(0),
+                (value) => [value],
+            ),
+            drill(4),
+        )
+    ) %}
+) {% format(
+    build(
+        withType(EXPORT_STATEMENT),
+        withName('targets')(chain(drill(2))),
+    )
+) %}
 
-STATEMENT -> (PURE_STATEMENT | EXPRESSION) {% formating(did) %}
+STATEMENT -> (PURE_STATEMENT | EXPRESSION) {% format(drill(0, 0)) %}
 
-UNSCOPED_STATEMENT -> (PURE_UNSCOPED_STATEMENT | EXPRESSION) {% formating(did) %}
+UNSCOPED_STATEMENT -> (PURE_UNSCOPED_STATEMENT | EXPRESSION) {% format(drill(0, 0)) %}
 
 PURE_STATEMENT -> (
     PURE_UNSCOPED_STATEMENT
     | DECLARATION
-) {% formating(did) %}
+) {% format(drill(0, 0)) %}
 
 PURE_UNSCOPED_STATEMENT -> (
     BLOCK
@@ -186,41 +251,41 @@ PURE_UNSCOPED_STATEMENT -> (
     | FOR
     | DO
     | ASSIGNMENT
-)
+) {% format(drill(0, 0)) %}
 
-BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")" {% formating((value) => {
-    return {
-        type: 'block',
-        contents: value[1]?.[1],
-    }
-}) %}
+BLOCK -> "(" (_ (PURE_STATEMENT | STATEMENT ( _ BREAK _ STATEMENT):+)):? _ ")" {% format(
+    build(
+        withType(BLOCK),
+        withName('body')(drill(1, 1)),
+    )
+) %}
 
-BREAK_STATEMENT -> "break" (_ %identifier):? {% formating((value) => {
-    return {
-        type: 'break',
-        label: value[1]?.[1]
-    }
-}) %}
-CONTINUE -> "continue" (_ %identifier):? {% formating((value) => {
-    return {
-        type: 'continue',
-        label: value[1]?.[1]
-    }
-}) %}
-RETURN -> "return" (_ EXPRESSION):? {% formating((value) => {
-    return {
-        type: 'return',
-        value: value[1]?.[1]
-    }
-}) %}
-USE -> "use" _ EXPRESSION {% formating((value) => {
-    return {
-        type: 'use',
-        value: value[2]
-    }
-}) %}
+BREAK_STATEMENT -> "break" (_ %identifier):? {% format(
+    build(
+        withType(BREAK),
+        withName('label')(drill(1, 1)),
+    )
+) %}
+CONTINUE -> "continue" (_ %identifier):? {% format(
+    build(
+        withType(CONTINUE),
+        withName('label')(drill(1, 1)),
+    )
+) %}
+RETURN -> "return" (_ EXPRESSION):? {% format(
+    build(
+        withType(RETURN),
+        withName('value')(drill(1, 1)),
+    )
+) %}
+USE -> "use" _ EXPRESSION {% format(
+    build(
+        withType(USE),
+        withName('value')(drill(2)),
+    )
+) %}
 
-CONDITION -> "(" _ EXPRESSION _ ")" {% formating((value) => value[2]) %}
+CONDITION -> "(" _ EXPRESSION _ ")" {% format(drill(2)) %}
 IF -> LABEL:? "if" _ CONDITION _ STATEMENT (_ "else" _ STATEMENT):? {% format(
     build(
         withType(IF),
@@ -245,7 +310,18 @@ SWITCH -> LABEL:? "switch" _ CONDITION _ "(" (_ CASE):* (_ DEFAULT_CASE (_ CASE)
         withType(SWITCH),
         withName('label')(drill(0)),
         withName('condition')(drill(3)),
-        withName('cases')(join(drill(6, 1), drill(7, 2, 1))),
+        withName('cases')(
+            join(
+                chain(
+                    drill(6),
+                    each(drill(1)),
+                ),
+                chain(
+                    drill(7, 2),
+                    each(drill(1)),
+                )
+            )
+        ),
         withName('default_case')(drill(7, 1)),
     )
 ) %}
