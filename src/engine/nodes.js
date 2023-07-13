@@ -33,4 +33,7 @@ module.exports = {
   INLINE_SEQUENCE: Symbol("INLINE_SEQUENCE"),
   ASSIGNMENT: Symbol("ASSIGNMENT"),
   AUTO_TYPE: Symbol("AUTO_TYPE"),
+  WHILE: Symbol("WHILE"),
+  SWITCH: Symbol("SWITCH"),
+  IF: Symbol("IF"),
 }

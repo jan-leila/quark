@@ -34,6 +34,9 @@
         INLINE_SEQUENCE,
         ASSIGNMENT,
         AUTO_TYPE,
+        WHILE,
+        SWITCH,
+        IF,
     } = require('../src/engine/nodes.js')
 
     const debug = false
@@ -54,7 +57,8 @@
     const drill = (...offsets) => (tree) => offsets.reduce((subtree, offset) => subtree?.[offset], tree)
     const chain = (...lambdas) => (tree, context) => lambdas.reduce((data, lambda) => lambda(data, context), tree)
     const build = (...lambdas) => (tree, context) => lambdas.reduce((data, lambda) => ({ ...data, ...(lambda?.(tree, context) ?? {}) }), {})
-    
+    const join  = (...lambdas) => (tree, context) => lambdas.map((lambda) => lambda(tree, context)).flat()
+
     const each =  (lambda) => (tree, context) => tree.map((subTree) => lambda(subTree, context))
 
     const withLog = (lambda) => (tree) => {
@@ -152,7 +156,7 @@ EXPORT_NAME -> %identifier {% formating((value) => {
         target: value[0],
         as: value[0],
     }
-}) %} | EXPRESSION _ "as" _ (%identifier | "default") {% formating(() => {
+}) %} | EXPRESSION _ "as" _ (%identifier | "default") {% formating((value) => {
     return {
         target: value[0],
         as: value[3],
@@ -217,43 +221,42 @@ USE -> "use" _ EXPRESSION {% formating((value) => {
 }) %}
 
 CONDITION -> "(" _ EXPRESSION _ ")" {% formating((value) => value[2]) %}
-IF -> LABEL:? "if" _ CONDITION _ STATEMENT (_ "else" _ STATEMENT {% formating((value) => value[3]) %}):? {% formating((value) => {
-    return {
-        type: 'if',
-        label: value[0],
-        condition: value[3],
-        then: value[5],
-        else: value[6]
-    }
-}) %}
-CASE -> "case" _ "(" _ MANY[EXPRESSION] _ ")" {% formating((value) => {
-    return value[4]
-}) %}
-SWITCH -> LABEL:? "switch" _ CONDITION _ "(" (_ CASE _ STATEMENT):* (_ "default" (_ CASE):? _ STATEMENT):? _ ")" {% formating(() => {
-    return {
-        type: 'switch',
-        label: value[0],
-        condition: value[3],
-        cases: value[6].map((value) => {
-            return {
-                cases: value[1],
-                contents: value[3]
-            }
-        }),
-        default_case: {
-            cases: value[7]?.[2]?.[1],
-            contents: value[7]?.[5]
-        }
-    }
-}) %}
-WHILE -> LABEL:? "while" _ CONDITION _ UNSCOPED_STATEMENT {% formating((value) => {
-    return {
-        type: 'while',
-        label: value[0],
-        condition: value[3],
-        contents: value[5]
-    }
-}) %}
+IF -> LABEL:? "if" _ CONDITION _ STATEMENT (_ "else" _ STATEMENT):? {% format(
+    build(
+        withType(IF),
+        withName('label')(drill(0)),
+        withName('condition')(drill(3)),
+        withName('then')(drill(5)),
+        withName('else')(drill(6, 3)),
+    )
+) %}
+MANY_CASES -> "(" _ MANY[EXPRESSION] _ ")" {% format(
+    drill(2)
+) %}
+CASE -> "case" _ (EXPRESSION | MANY_CASES) _ ":" STATEMENT {% format(
+    build(
+        withName('targets')(drill(2, 0)),
+        withName('body')(drill(5)),
+    )
+) %}
+DEFAULT_CASE -> "default" _ ":" STATEMENT
+SWITCH -> LABEL:? "switch" _ CONDITION _ "(" (_ CASE):* (_ DEFAULT_CASE (_ CASE):* ):? _ ")" {% format(
+    build(
+        withType(SWITCH),
+        withName('label')(drill(0)),
+        withName('condition')(drill(3)),
+        withName('cases')(join(drill(6, 1), drill(7, 2, 1))),
+        withName('default_case')(drill(7, 1)),
+    )
+) %}
+WHILE -> LABEL:? "while" _ CONDITION _ UNSCOPED_STATEMENT {% format(
+    build(
+        withType(WHILE),
+        withName('label')(drill(0)),
+        withName('condition')(drill(3)),
+        withName('body')(drill(5)),
+    )
+) %}
 DO_IF -> DO _ "if" _ CONDITION {% format(
     build(
         withType(DO_IF),
